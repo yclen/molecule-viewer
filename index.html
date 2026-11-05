@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Molecule Viewer</title>
+  </head>
+  <body>
+    <div id="viewport"></div>
+
+    <aside id="panel">
+      <header>
+        <h1>Molecule Viewer</h1>
+      </header>
+
+      <section class="row">
+        <button id="open-btn" class="primary wide" title="Open an .xyz file (O)">Open file…</button>
+        <input type="file" id="file-input" accept=".xyz,.txt" hidden />
+      </section>
+
+      <section id="examples">
+        <div class="label">Examples <span class="hint">↑ ↓ to step through</span></div>
+        <div id="tab-bar" class="tabs"></div>
+        <ul id="example-list"></ul>
+      </section>
+
+      <section id="params" hidden>
+        <div class="label"><span id="param-label"></span> <span class="hint">− / + keys</span></div>
+        <div class="row">
+          <button id="param-dec" class="step" title="Fewer (−)">−</button>
+          <input type="number" id="param-input" />
+          <button id="param-inc" class="step" title="More (+)">+</button>
+          <input type="range" id="param-slider" />
+        </div>
+        <div id="param-note" class="muted param-note"></div>
+      </section>
+
+      <section id="info" hidden>
+        <div id="mol-name" class="name"></div>
+        <div id="mol-formula" class="formula"></div>
+        <dl>
+          <dt>Atoms</dt><dd id="mol-atoms"></dd>
+          <dt>Bonds</dt><dd id="mol-bonds"></dd>
+          <dt>Comment</dt><dd id="mol-comment" class="comment"></dd>
+        </dl>
+      </section>
+
+      <section>
+        <div class="label">Style</div>
+        <div id="style-buttons" class="segmented"></div>
+        <div class="row spaced">
+          <label class="check"><input type="checkbox" id="show-h" checked /> Show hydrogens</label>
+          <button id="reset-view" title="Reset view (R)">Reset view</button>
+        </div>
+      </section>
+
+      <section id="measure">
+        <div class="label">Measure <span class="hint">click atoms · Esc clears</span></div>
+        <div id="measure-body" class="muted">Click 2–4 atoms to measure distance, angle and dihedral.</div>
+      </section>
+
+      <section id="frames" hidden>
+        <div class="label">Trajectory <span id="frame-label"></span></div>
+        <div class="row">
+          <button id="play-btn" title="Play / pause (Space)">▶</button>
+          <input type="range" id="frame-slider" min="0" max="0" value="0" />
+        </div>
+      </section>
+
+      <footer>
+        Drag to rotate · right-drag to pan · scroll to zoom<br />
+        Click atoms to measure · drop an <code>.xyz</code> file anywhere<br />
+        Keys: 1–4 style · H hydrogens · R reset · ↑↓ examples · −/+ size
+      </footer>
+    </aside>
+
+    <div id="empty-state">Drop an <code>.xyz</code> file here, or pick a sample</div>
+    <div id="drop-overlay" hidden><div>Drop to open</div></div>
+    <div id="tooltip" hidden></div>
+    <div id="toast" hidden></div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

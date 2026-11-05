@@ -1,0 +1,42 @@
+[
+  {
+    "file": "fluorescein.xyz",
+    "name": "Fluorescein (dianion)",
+    "description": "Abs ~490 nm / Em ~515 nm (pH > 8). The open dianion is the bright species."
+  },
+  {
+    "file": "eosin-y.xyz",
+    "name": "Eosin Y",
+    "description": "2',4',5',7'-Tetrabromofluorescein. Abs ~517 / Em ~540 nm. Photoredox catalyst."
+  },
+  {
+    "file": "erythrosin-b.xyz",
+    "name": "Erythrosin B",
+    "description": "Tetraiodofluorescein. Abs ~526 / Em ~550 nm. Heavy-atom effect: strong triplet yield."
+  },
+  {
+    "file": "rose-bengal.xyz",
+    "name": "Rose Bengal",
+    "description": "Tetrachloro-tetraiodofluorescein. Abs ~549 / Em ~570 nm. Efficient singlet-oxygen sensitizer."
+  },
+  {
+    "file": "rhodamine-b.xyz",
+    "name": "Rhodamine B",
+    "description": "Abs ~554 / Em ~577 nm (EtOH). Classic laser dye and tracer."
+  },
+  {
+    "file": "rhodamine-6g.xyz",
+    "name": "Rhodamine 6G",
+    "description": "Abs ~530 / Em ~552 nm. Quantum yield ~0.95; the standard laser dye."
+  },
+  {
+    "file": "tmr.xyz",
+    "name": "Tetramethylrhodamine (TMR)",
+    "description": "Abs ~550 / Em ~575 nm. Common label for proteins and antibodies."
+  },
+  {
+    "file": "texas-red.xyz",
+    "name": "Texas Red",
+    "description": "Sulforhodamine 101 sulfonyl chloride. Abs ~589 / Em ~615 nm."
+  }
+]

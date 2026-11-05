@@ -1,0 +1,42 @@
+[
+  {
+    "id": "basics",
+    "label": "Basics"
+  },
+  {
+    "id": "triplet",
+    "label": "Triplet molecules"
+  },
+  {
+    "id": "xanthenes",
+    "label": "Xanthenes"
+  },
+  {
+    "id": "cyanines",
+    "label": "Cyanines"
+  },
+  {
+    "id": "dyes",
+    "label": "Other dyes"
+  },
+  {
+    "id": "proteins",
+    "label": "Proteins"
+  },
+  {
+    "id": "tta",
+    "label": "TTA upconversion"
+  },
+  {
+    "id": "tadf",
+    "label": "TADF"
+  },
+  {
+    "id": "uc-sens",
+    "label": "Review: TADF sensitizers"
+  },
+  {
+    "id": "uc-emit",
+    "label": "Review: UC emitters"
+  }
+]

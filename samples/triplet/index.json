@@ -1,0 +1,28 @@
+[
+  {
+    "file": "molecular-wire",
+    "name": "Molecular wire",
+    "description": "n DPA units joined anthracene C2 → 1,4-phenylene → C6, H on both ends (R = H). Set n below; n = 1 is plain DPA.",
+    "param": {
+      "data": "dpa-wire.param.json",
+      "label": "DPA units",
+      "symbol": "n",
+      "min": 1,
+      "max": 20,
+      "default": 3
+    }
+  },
+  {
+    "file": "tta-flora-4",
+    "name": "TTA Flora 4",
+    "description": "Sensitizer (bis-triarylamine thienoquinoxaline dioxide) – phenylene – n DPA mediators – perylene. n = 0 is the direct sensitizer–linker–perylene dyad.",
+    "param": {
+      "data": "tta-flora-4.param.json",
+      "label": "DPA mediators",
+      "symbol": "n",
+      "min": 0,
+      "max": 20,
+      "default": 2
+    }
+  }
+]

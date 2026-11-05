@@ -1,0 +1,117 @@
+[
+  {
+    "file": "dpa.xyz",
+    "name": "DPA",
+    "description": "9,10-Diphenylanthracene. Blue emitter used with 4CzTPN-Ph, MR-1, BTZ-DMAC(-4Br), DMACPDO, DCF-MPYM."
+  },
+  {
+    "file": "perylene.xyz",
+    "name": "Perylene",
+    "description": "Blue emitter with DCF-MPYM (635 nm excitation) and BNS (721 nm, ηUC 3.0%)."
+  },
+  {
+    "file": "ttbp.xyz",
+    "name": "TTBP",
+    "description": "2,5,8,11-Tetra-tert-butylperylene, T1 1.53 eV, ΦFL 94.8%. NIR→blue with S2. Ref 56."
+  },
+  {
+    "file": "tips-bea.xyz",
+    "name": "TIPS-BEA",
+    "description": "9,10-Bis[(triisopropylsilyl)ethynyl]anthracene. With BNS: 721 nm → 451 nm, ηUC 5.8%."
+  },
+  {
+    "file": "dbp.xyz",
+    "name": "DBP (2,7-di-tBu-pyrene)",
+    "description": "T1 2.5 eV, S1 3.3 eV. The emitter tethered to 4CzPN in the DBP conjugates. Ref 57."
+  },
+  {
+    "file": "14-tips-naph.xyz",
+    "name": "1,4-TIPS-Naph",
+    "description": "1,4-Bis(TIPS-ethynyl)naphthalene, T1 2.11 eV. Best UV emitter here: ηUC 26.2% with 4CzBN, 21.4% with BN-Se."
+  },
+  {
+    "file": "15-tips-naph.xyz",
+    "name": "1,5-TIPS-Naph",
+    "description": "1,5-Bis(TIPS-ethynyl)naphthalene, T1 2.24 eV. With BN-2Cz-tBu (ηUC 2.5%). Ref 44."
+  },
+  {
+    "file": "1-tna.xyz",
+    "name": "1-TNA",
+    "description": "1-(TIPS-ethynyl)naphthalene, T1 2.40 eV. With BN-Se: 0.93 eV anti-Stokes shift. Ref 62."
+  },
+  {
+    "file": "p-terphenyl.xyz",
+    "name": "p-Terphenyl (TP)",
+    "description": "UV emitter (343 nm) with 4CzIPN: ηUC 2.8%, ΔE 0.83 eV. Ref 58."
+  },
+  {
+    "file": "p-quaterphenyl.xyz",
+    "name": "p-Quaterphenyl",
+    "description": "Emits at 353 nm with 4CzIPN (ηUC 3.9%). Ref 58."
+  },
+  {
+    "file": "r-s-tp.xyz",
+    "name": "R/S-TP (chiral terphenyl dimer)",
+    "description": "Two p-terphenyls stacked on a [2.2]paracyclophane. With 4CzIPN: circularly polarized UV upconversion at 385 nm, ηUC 7.9%. Ref 61."
+  },
+  {
+    "file": "dpn.xyz",
+    "name": "DPN",
+    "description": "1,4-Diphenylnaphthalene. Emitter and host for all-solid-state UC with BBCz-SB-Br. Ref 68."
+  },
+  {
+    "file": "sidpn-1.xyz",
+    "name": "SiDPN-1",
+    "description": "DPN with a triphenylsilyl group: amorphous glassy film, UC lifetime 2.8 ms. Ref 68."
+  },
+  {
+    "file": "sidpn-2.xyz",
+    "name": "SiDPN-2",
+    "description": "Two DPN units on one silicon; Ith 44 mW cm⁻² in the solid state. Ref 68."
+  },
+  {
+    "file": "p-tips-bp.xyz",
+    "name": "p-TIPS-BP",
+    "description": "4-(TIPS-ethynyl)biphenyl, S1 4.04 eV. 447 nm → 328 nm with 4CzIPN, ΔE 1.01 eV. Ref 64."
+  },
+  {
+    "file": "btips-bz.xyz",
+    "name": "bTIPS-Bz",
+    "description": "1,4-Bis(TIPS-ethynyl)benzene, S1 4.15 eV. First purely organic visible→UVB UC (318 nm); drives a Norrish type I reaction. Ref 66."
+  },
+  {
+    "file": "tips-bz.xyz",
+    "name": "TIPS-Bz",
+    "description": "(Phenylethynyl)triisopropylsilane, S1 4.43 eV. UVC emitter (~295 nm) with Hep. Ref 69."
+  },
+  {
+    "file": "bu-tips-bz.xyz",
+    "name": "Bu-TIPS-Bz",
+    "description": "4-tert-Butyl TIPS-Bz; triplet lifetime 14.5 µs. Ref 69."
+  },
+  {
+    "file": "bbu-tips-bz.xyz",
+    "name": "bBu-TIPS-Bz",
+    "description": "3,5-Di-tert-butyl TIPS-Bz: bulk suppresses triplet excimers (τT 29.5 µs); best of the series. Ref 69."
+  },
+  {
+    "file": "ppd.xyz",
+    "name": "PPD",
+    "description": "2,5-Diphenyl-1,3,4-oxadiazole; UV emitter screened with 4CzBN. Ref 63."
+  },
+  {
+    "file": "ppo.xyz",
+    "name": "PPO",
+    "description": "2,5-Diphenyloxazole (scintillator); ηUC ~14% with 4CzBN. Ref 63."
+  },
+  {
+    "file": "ppf.xyz",
+    "name": "PPF",
+    "description": "2,5-Diphenylfuran; UV emitter screened with 4CzBN. Ref 63."
+  },
+  {
+    "file": "2pi.xyz",
+    "name": "2PI",
+    "description": "2-Phenylindene; UV emitter screened with 4CzBN. Ref 63."
+  }
+]

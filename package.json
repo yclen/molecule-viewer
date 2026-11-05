@@ -1,0 +1,24 @@
+{
+  "name": "molecule-viewer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "samples": "python tools/make_samples.py",
+    "examples": "python tools/build_examples.py",
+    "wire": "python tools/build_wire.py",
+    "triplet": "python tools/build_triplet.py",
+    "icon": "python tools/make_icon.py",
+    "shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/create-shortcut.ps1"
+  },
+  "dependencies": {
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "vite": "^8.3.5",
+    "vite-plugin-singlefile": "^2.3.4"
+  }
+}

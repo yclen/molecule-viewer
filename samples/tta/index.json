@@ -1,0 +1,32 @@
+[
+  {
+    "file": "dpa.xyz",
+    "name": "9,10-Diphenylanthracene (DPA)",
+    "description": "Benchmark annihilator. Abs ~375 / Em ~410-430 nm, QY ~0.95."
+  },
+  {
+    "file": "perylene.xyz",
+    "name": "Perylene",
+    "description": "Blue annihilator. Abs ~436 / Em ~445-475 nm."
+  },
+  {
+    "file": "pyrene.xyz",
+    "name": "Pyrene",
+    "description": "UV annihilator; famous for excimer emission (~480 nm)."
+  },
+  {
+    "file": "bpea.xyz",
+    "name": "BPEA",
+    "description": "9,10-Bis(phenylethynyl)anthracene. Green-emitting annihilator, Em ~470-490 nm."
+  },
+  {
+    "file": "rubrene.xyz",
+    "name": "Rubrene",
+    "description": "Tetraphenyltetracene. Yellow annihilator (Em ~560 nm); also a singlet-fission material."
+  },
+  {
+    "file": "ptoep.xyz",
+    "name": "PtOEP (sensitizer)",
+    "description": "Pt(II) octaethylporphyrin. Absorbs ~535 nm, phosphoresces ~646 nm; pairs with DPA."
+  }
+]

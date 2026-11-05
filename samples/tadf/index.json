@@ -1,0 +1,12 @@
+[
+  {
+    "file": "4czipn.xyz",
+    "name": "4CzIPN",
+    "description": "Carbazole donors around a dicyanobenzene acceptor. Em ~507-520 nm; also a photocatalyst."
+  },
+  {
+    "file": "dmac-trz.xyz",
+    "name": "DMAC-TRZ",
+    "description": "Acridan donor + triazine acceptor, nearly perpendicular. Sky-blue TADF emitter (~495 nm)."
+  }
+]

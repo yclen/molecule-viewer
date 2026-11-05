@@ -1,0 +1,47 @@
+[
+  {
+    "file": "coumarin-153.xyz",
+    "name": "Coumarin 153",
+    "description": "Abs ~423 / Em ~530 nm (EtOH). Classic solvation-dynamics probe."
+  },
+  {
+    "file": "bodipy.xyz",
+    "name": "BODIPY core",
+    "description": "4,4-Difluoro-4-bora-3a,4a-diaza-s-indacene. Abs ~497 / Em ~505 nm; very narrow bands."
+  },
+  {
+    "file": "nile-red.xyz",
+    "name": "Nile Red",
+    "description": "Solvatochromic lipid stain. Em ~550-650 nm depending on environment."
+  },
+  {
+    "file": "prodan.xyz",
+    "name": "Prodan",
+    "description": "Push-pull naphthalene; strongly solvatochromic (Em ~400-530 nm)."
+  },
+  {
+    "file": "acridine-orange.xyz",
+    "name": "Acridine Orange",
+    "description": "Nucleic-acid stain. Em ~525 nm (dsDNA) / ~650 nm (RNA)."
+  },
+  {
+    "file": "dapi.xyz",
+    "name": "DAPI",
+    "description": "Blue DNA stain (minor groove). Abs ~358 / Em ~461 nm when bound."
+  },
+  {
+    "file": "hoechst-33258.xyz",
+    "name": "Hoechst 33258",
+    "description": "Cell-permeant blue DNA stain. Abs ~352 / Em ~461 nm."
+  },
+  {
+    "file": "ethidium.xyz",
+    "name": "Ethidium",
+    "description": "Intercalating DNA stain. Em ~605 nm, ~20x brighter when bound."
+  },
+  {
+    "file": "quinine.xyz",
+    "name": "Quinine",
+    "description": "Fluorescence quantum-yield standard (in 0.5 M H2SO4). Abs ~350 / Em ~450 nm."
+  }
+]

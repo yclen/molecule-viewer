@@ -1,0 +1,22 @@
+[
+  {
+    "file": "hbdi.xyz",
+    "name": "GFP chromophore (HBDI)",
+    "description": "p-Hydroxybenzylidene-imidazolinone, the Z-isomer that forms inside GFP."
+  },
+  {
+    "file": "gfp.xyz",
+    "name": "GFP (wild-type, 2WUR)",
+    "description": "Aequorea victoria GFP, 0.9 Å X-ray structure. Abs 395/475 / Em 509 nm."
+  },
+  {
+    "file": "egfp.xyz",
+    "name": "EGFP (2Y0G)",
+    "description": "Enhanced GFP (F64L/S65T). Abs 488 / Em 507 nm. The standard green FP."
+  },
+  {
+    "file": "mcherry.xyz",
+    "name": "mCherry (2H5Q)",
+    "description": "Monomeric red FP derived from DsRed. Abs 587 / Em 610 nm."
+  }
+]

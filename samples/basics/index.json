@@ -1,0 +1,52 @@
+[
+  {
+    "file": "ferrocene.xyz",
+    "name": "Ferrocene",
+    "description": "Fe(C5H5)2, iron sandwiched between two rings"
+  },
+  {
+    "file": "water.xyz",
+    "name": "Water",
+    "description": "H2O"
+  },
+  {
+    "file": "methane.xyz",
+    "name": "Methane",
+    "description": "CH4, perfect tetrahedron"
+  },
+  {
+    "file": "ethanol.xyz",
+    "name": "Ethanol",
+    "description": "C2H5OH"
+  },
+  {
+    "file": "benzene.xyz",
+    "name": "Benzene",
+    "description": "C6H6 aromatic ring"
+  },
+  {
+    "file": "cyclohexane.xyz",
+    "name": "Cyclohexane (chair)",
+    "description": "C6H12 in the chair conformation"
+  },
+  {
+    "file": "sf6.xyz",
+    "name": "Sulfur hexafluoride",
+    "description": "Octahedral SF6"
+  },
+  {
+    "file": "c60.xyz",
+    "name": "Buckminsterfullerene",
+    "description": "C60 'buckyball'"
+  },
+  {
+    "file": "diamond.xyz",
+    "name": "Diamond lattice",
+    "description": "4x4x4 unit cells, ~600 carbon atoms"
+  },
+  {
+    "file": "ethane-rotation.xyz",
+    "name": "Ethane rotation (trajectory)",
+    "description": "72-frame torsion scan around the C-C bond"
+  }
+]

@@ -1,0 +1,22 @@
+[
+  {
+    "file": "cy3.xyz",
+    "name": "Cy3 (sulfo, acid)",
+    "description": "Trimethine indocyanine. Abs ~550 / Em ~570 nm."
+  },
+  {
+    "file": "cy5.xyz",
+    "name": "Cy5 (sulfo, acid)",
+    "description": "Pentamethine indocyanine. Abs ~649 / Em ~670 nm. Workhorse red dye for single-molecule work."
+  },
+  {
+    "file": "cy7.xyz",
+    "name": "Cy7 (sulfo, acid)",
+    "description": "Heptamethine indocyanine. Abs ~750 / Em ~773 nm (near-IR)."
+  },
+  {
+    "file": "icg.xyz",
+    "name": "Indocyanine green (ICG)",
+    "description": "FDA-approved NIR dye. Abs ~780 / Em ~810 nm. Used in angiography and surgery."
+  }
+]
