@@ -5,6 +5,7 @@ import { detectBonds } from './bonds.js';
 import { hillFormula } from './elements.js';
 import { buildParametric, clampParam } from './parametric.js';
 import { excitationWeights } from './excitation.js';
+import { ExcitedStates } from './excited-states.js';
 import { Color } from 'three';
 import TABS from '../samples/tabs.json';
 import faviconUrl from '../assets/favicon.png?inline';
@@ -55,7 +56,8 @@ const bondsFor = (i) => (state.bonds[i] ??= detectBonds(state.frames[i].atoms));
 // Loading
 // ---------------------------------------------------------------------------
 
-function loadText(text, name, sites = null) {
+/** objectKey: what excited states are remembered under (an example's key, or the file name). */
+function loadText(text, name, sites = null, objectKey = name) {
   let frames;
   try {
     frames = parseXYZ(text);
@@ -67,7 +69,7 @@ function loadText(text, name, sites = null) {
   Object.assign(state, { name, frames, bonds: new Array(frames.length), frame: 0 });
   setPicked([]);
   viewer.setMolecule(frames[0].atoms, bondsFor(0));
-  setSites(sites ?? [{ label: 'Whole molecule', kind: 'molecule', atoms: frames[0].atoms.map((_, i) => i) }]);
+  setSites(objectKey, sites ?? [{ label: 'Whole molecule', kind: 'molecule', atoms: frames[0].atoms.map((_, i) => i) }]);
   $('empty-state').hidden = true;
   $('info').hidden = false;
   setupFrames();
@@ -97,7 +99,7 @@ function loadExample(tab, entry) {
   if (entry.param) return loadParametric(tab, entry, paramValues.get(key) ?? entry.param.default);
   const text = SAMPLE_TEXT[key];
   if (text === undefined) return toast(`Example ${key} is missing.`);
-  if (loadText(text, entry.name)) {
+  if (loadText(text, entry.name, null, key)) {
     setActiveExample(key);
     setParamObject(null);
   }
@@ -120,7 +122,7 @@ function loadParametric(tab, entry, value) {
   } catch (err) {
     return toast(`Couldn't build ${entry.name}: ${err.message}`);
   }
-  if (!loadText(built.text, `${entry.name} (${p.symbol ?? 'n'} = ${value})`, built.sites)) return;
+  if (!loadText(built.text, `${entry.name} (${p.symbol ?? 'n'} = ${value})`, built.sites, key)) return;
   paramValues.set(key, value);
   setActiveExample(key);
   setParamObject({ tab, entry }, value, built.note);
@@ -377,6 +379,8 @@ let picked = []; // atom indices, in click order
 
 viewer.onAtomClick = (i) => {
   if (i < 0) return setPicked([]); // click on empty space clears
+  const site = excite.sites.find((s) => s.atoms.includes(i));
+  if (site) selectSite(site.label); // clicking a molecule also opens it in the Excited states editor
   if (picked.includes(i)) return setPicked(picked.filter((j) => j !== i)); // click again to unpick
   setPicked(picked.length >= MAX_PICK ? [i] : [...picked, i]);
 };
@@ -467,7 +471,7 @@ window.addEventListener('keydown', (e) => {
     setShowHydrogens(!$('show-h').checked);
   } else if (k === 'r') viewer.fitView();
   else if (k === 'o') fileInput.click();
-  else if (k === 'e' && excite.sites.length) toggleDefaultSite();
+  else if (k === 'e' && excite.sites.length) toggleSelectedSite();
   else if (paramObject && SIZE_KEYS[e.code] !== undefined) setParamValue(curParam() + SIZE_KEYS[e.code]);
   else if (k === ' ' && state.frames.length > 1) {
     e.preventDefault();
@@ -479,42 +483,71 @@ window.addEventListener('keydown', (e) => {
 // Excited state: a glowing Gaussian cloud on the excited chromophore(s)
 // ---------------------------------------------------------------------------
 
-const excite = {
-  sites: [], // [{ label, kind, atoms }]
-  on: new Set(), // labels of excited sites (kept when the molecule is rebuilt, e.g. a new n)
-  weights: new Map(), // label -> { atoms, weights, method } for the current molecule
-  color: new Color('#3d8bff'),
-};
+// Each site (molecule / chromophore) has its own state E = { on, color, gain, sigma } (see excited-states.js).
+// One site is selected at a time; the editor below the list changes only that one, and every other site keeps
+// what was set for it.
+const excite = new ExcitedStates();
+excite.selected = null; // label of the site being edited
+excite.weights = new Map(); // label -> { atoms, weights, method } for the current molecule
+if (import.meta.env.DEV) window.__excite = excite; // e.g. __excite.set('DPA 1', { on: true }); __updateGlow()
 
-function setSites(sites) {
-  excite.sites = sites;
+function setSites(objectKey, sites) {
+  excite.setSites(objectKey, sites);
   excite.weights.clear();
-  const labels = new Set(sites.map((s) => s.label));
-  for (const l of [...excite.on]) if (!labels.has(l)) excite.on.delete(l);
-  $('site-chips').replaceChildren(
+  $('site-list').replaceChildren(
     ...sites.map((s) => {
-      const b = document.createElement('button');
-      b.textContent = s.label;
-      b.dataset.label = s.label;
-      b.addEventListener('click', () => toggleSite(s.label));
-      return b;
+      const li = document.createElement('li');
+      li.dataset.label = s.label;
+      li.tabIndex = 0;
+      const sw = document.createElement('button');
+      sw.className = 'e-switch';
+      sw.title = 'Excite / de-excite';
+      sw.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectSite(s.label);
+        toggleSite(s.label);
+      });
+      const name = Object.assign(document.createElement('span'), { className: 'e-name', textContent: s.label });
+      const st = Object.assign(document.createElement('span'), { className: 'e-state' });
+      li.append(sw, name, st);
+      li.addEventListener('click', () => selectSite(s.label));
+      li.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') selectSite(s.label);
+      });
+      return li;
     }),
   );
   $('excite').hidden = false;
+  // keep editing the same site across rebuilds (e.g. a new n); otherwise start on the first excited one
+  const keep = sites.some((s) => s.label === excite.selected);
+  selectSite(keep ? excite.selected : (excite.excited()[0] ?? sites[0]).label);
+}
+
+function selectSite(label) {
+  excite.selected = label;
+  const st = excite.get(label);
+  $('edit-name').textContent = label;
+  $('edit-on').checked = st.on;
+  $('glow-color').value = st.color;
+  $('glow-gain').value = st.gain;
+  $('glow-sigma').value = st.sigma;
+  updateGlow();
+}
+
+function editSelected(patch) {
+  if (excite.selected) excite.set(excite.selected, patch);
   updateGlow();
 }
 
 function toggleSite(label) {
-  if (excite.on.has(label)) excite.on.delete(label);
-  else excite.on.add(label);
+  excite.set(label, { on: !excite.get(label).on });
+  if (label === excite.selected) $('edit-on').checked = excite.get(label).on;
   updateGlow();
 }
 
-/** E key: switch everything off, or excite the first DPA (or the first site if there is no DPA). */
-function toggleDefaultSite() {
-  if (excite.on.size) excite.on.clear();
-  else excite.on.add((excite.sites.find((s) => s.label.startsWith('DPA')) ?? excite.sites[0]).label);
-  updateGlow();
+/** E key: excite / de-excite the selected site. */
+function toggleSelectedSite() {
+  if (excite.selected) toggleSite(excite.selected);
 }
 
 function siteWeights(site) {
@@ -528,35 +561,49 @@ function updateGlow() {
   const atoms = state.frames[state.frame]?.atoms ?? [];
   const sources = [];
   const methods = new Set();
-  for (const site of excite.sites) {
-    if (!excite.on.has(site.label)) continue;
+  for (const site of excite.excited()) {
+    const st = excite.get(site.label);
+    const color = new Color(st.color);
     const w = siteWeights(site);
     w.atoms.forEach((i, k) => {
-      if (w.weights[k] > 0.02) sources.push({ ...atoms[i], weight: w.weights[k], color: excite.color });
+      if (w.weights[k] > 0.02) sources.push({ ...atoms[i], weight: w.weights[k] * st.gain, sigma: st.sigma, color });
     });
     methods.add(w.method);
   }
   viewer.setGlow(sources);
-  for (const b of $('site-chips').children) b.classList.toggle('excited', excite.on.has(b.dataset.label));
+  updateSiteList();
+  const st = excite.selected && excite.get(excite.selected);
+  if (st) {
+    $('glow-gain-val').textContent = `${st.gain.toFixed(2)}×`;
+    $('glow-sigma-val').textContent = `${st.sigma.toFixed(1)} Å`;
+  }
   $('excite-note').textContent = methods.size
     ? `Glow follows the π density of the lowest excitation (${[...methods].join(', ')}, twist-corrected).`
     : '';
 }
+if (import.meta.env.DEV) window.__updateGlow = updateGlow;
 
-function setGlowParams() {
-  const gain = Number($('glow-gain').value);
-  const sigma = Number($('glow-sigma').value);
-  viewer.setGlowParams({ gain, sigma });
-  $('glow-gain-val').textContent = `${gain.toFixed(2)}×`;
-  $('glow-sigma-val').textContent = `${sigma.toFixed(1)} Å`;
+function updateSiteList() {
+  for (const li of $('site-list').children) {
+    const st = excite.get(li.dataset.label);
+    li.classList.toggle('selected', li.dataset.label === excite.selected);
+    li.classList.toggle('excited', st.on);
+    li.style.setProperty('--e-color', st.color);
+    li.querySelector('.e-state').textContent = st.on ? 'excited' : 'ground';
+  }
 }
-$('glow-gain').addEventListener('input', setGlowParams);
-$('glow-sigma').addEventListener('input', setGlowParams);
-$('glow-color').addEventListener('input', (e) => {
-  excite.color.set(e.target.value);
-  updateGlow();
-});
-setGlowParams();
+
+$('edit-on').addEventListener('change', (e) => editSelected({ on: e.target.checked }));
+$('glow-color').addEventListener('input', (e) => editSelected({ color: e.target.value }));
+$('glow-gain').addEventListener('input', (e) => editSelected({ gain: Number(e.target.value) }));
+$('glow-sigma').addEventListener('input', (e) => editSelected({ sigma: Number(e.target.value) }));
+for (const [id, on] of [['excite-all-on', true], ['excite-all-off', false]]) {
+  $(id).addEventListener('click', () => {
+    excite.setAll({ on });
+    $('edit-on').checked = on;
+    updateGlow();
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Toast

@@ -21,6 +21,7 @@ const spriteVert = /* glsl */ `
   attribute vec3 iColor;
   attribute float iWeight;
   attribute float iPhase;
+  attribute float iSigma;
   uniform float uSigma;
   uniform float uTime;
   uniform float uPush;
@@ -30,8 +31,8 @@ const spriteVert = /* glsl */ `
   void main() {
     vec4 mv = modelViewMatrix * vec4(iCenter, 1.0);
     mv.z += uPush;                       // nudge toward the camera
-    mv.xy += position.xy * 3.0 * uSigma; // sprite spans +-3 sigma
-    vR = position.xy * 3.0;              // distance from the centre in units of sigma
+    mv.xy += position.xy * 4.0 * iSigma * uSigma; // sprite spans +-4 sigma (per source, times a global scale)
+    vR = position.xy * 4.0;              // distance from the centre in units of sigma
     // breathing pulse + a little per-atom shimmer
     float pulse = 1.0 + 0.16 * sin(6.2831853 * uTime / 1.9) + 0.07 * sin(4.7 * uTime + iPhase);
     vColor = iColor * iWeight * uGain * pulse;
@@ -43,7 +44,8 @@ const spriteFrag = /* glsl */ `
   varying vec2 vR;
   varying vec3 vColor;
   void main() {
-    float g = exp(-0.5 * dot(vR, vR));
+    // Gaussian shifted to reach exactly 0 at 4 sigma, so bright glows show no square sprite edges
+    float g = max(exp(-0.5 * dot(vR, vR)) - 3.3546e-4, 0.0) * 1.000336;
     gl_FragColor = vec4(vColor * g, 1.0);
   }
 `;
@@ -83,13 +85,11 @@ export class GlowLayer {
     this.count = 0;
     this.time = 0;
 
-    const quad = new THREE.PlaneGeometry(2, 2);
-    this.geo = new THREE.InstancedBufferGeometry();
-    this.geo.index = quad.index;
-    this.geo.setAttribute('position', quad.getAttribute('position'));
+    this.quad = new THREE.PlaneGeometry(2, 2);
+    this.geo = this._spriteGeometry();
     this.spriteMat = new THREE.ShaderMaterial({
       uniforms: {
-        uSigma: { value: 1.2 },
+        uSigma: { value: 1 }, // global multiplier on each source's own sigma
         uTime: { value: 0 },
         uPush: { value: 0.15 }, // Å toward the camera: mostly behind the atoms (backlit), a slight tint over them
         uGain: { value: 1 },
@@ -137,32 +137,49 @@ export class GlowLayer {
     this._clear = new THREE.Color();
   }
 
-  /** sources: [{ x, y, z, weight, color: THREE.Color }] in molecule coordinates. */
+  _spriteGeometry() {
+    const geo = new THREE.InstancedBufferGeometry();
+    geo.index = this.quad.index;
+    geo.setAttribute('position', this.quad.getAttribute('position'));
+    return geo;
+  }
+
+  /**
+   * sources: [{ x, y, z, weight, color: THREE.Color, sigma? }] in molecule coordinates.
+   * weight carries the brightness (0..∞), sigma the Gaussian width in Å (default 1.1).
+   */
   setSources(sources) {
     const n = sources.length;
     const center = new Float32Array(n * 3);
     const color = new Float32Array(n * 3);
     const weight = new Float32Array(n);
     const phase = new Float32Array(n);
+    const sigma = new Float32Array(n);
     sources.forEach((s, i) => {
       center.set([s.x, s.y, s.z], i * 3);
       color.set([s.color.r, s.color.g, s.color.b], i * 3);
       weight[i] = s.weight;
+      sigma[i] = s.sigma ?? 1.1;
       phase[i] = (i * 2.399963) % 6.2831853; // golden-angle spread: neighbours shimmer out of step
     });
-    for (const name of ['iCenter', 'iColor', 'iWeight', 'iPhase']) this.geo.deleteAttribute(name);
+    // A fresh geometry every time: three.js caches the largest drawable instance count per geometry from the
+    // first draw, so swapping in longer attribute arrays would silently draw only the first few sprites.
+    this.geo.dispose();
+    this.geo = this.mesh.geometry = this._spriteGeometry();
     this.geo.setAttribute('iCenter', new THREE.InstancedBufferAttribute(center, 3));
     this.geo.setAttribute('iColor', new THREE.InstancedBufferAttribute(color, 3));
     this.geo.setAttribute('iWeight', new THREE.InstancedBufferAttribute(weight, 1));
     this.geo.setAttribute('iPhase', new THREE.InstancedBufferAttribute(phase, 1));
+    this.geo.setAttribute('iSigma', new THREE.InstancedBufferAttribute(sigma, 1));
     this.geo.instanceCount = n;
     this.count = n;
   }
 
-  /** sigma: Gaussian width (Å); gain: brightness multiplier. */
-  setParams({ sigma, gain }) {
+  /** sigma: global width multiplier; gain: global brightness multiplier; push: Å toward the camera (past the atom spheres). */
+  setParams({ sigma, gain, push }) {
     if (sigma !== undefined) this.spriteMat.uniforms.uSigma.value = sigma;
     if (gain !== undefined) this.spriteMat.uniforms.uGain.value = gain;
+    if (push !== undefined) this.spriteMat.uniforms.uPush.value = push;
   }
 
   setSize(w, h) {

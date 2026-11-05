@@ -37,7 +37,7 @@ Drop an `.xyz` file onto the page, use **Open file…**, or pick one of the buil
 | Open file | button or `O` |
 | Play / pause trajectory | button or `Space` |
 | Atom info | hover an atom |
-| Excite / un-excite | site buttons under **Excited state**, or `E` |
+| Excite / un-excite | the dot next to a molecule under **Excited states**, or `E` for the selected one |
 
 ## How it works
 
@@ -53,10 +53,17 @@ Drop an `.xyz` file onto the page, use **Open file…**, or pick one of the buil
 
 ## Excited state
 
-The **Excited state** section puts a glowing, pulsing Gaussian cloud on an excited chromophore. Parametric
-objects list their chromophores as buttons (Sensitizer, DPA 1…n, Perylene); any other molecule has **Whole
-molecule**. Brightness, spread (Gaussian width in Å) and colour are adjustable. `E` toggles the first DPA (or
-the first site) on and off.
+The **Excited states** section puts a glowing, pulsing Gaussian cloud on excited chromophores. Parametric
+objects list their chromophores (Sensitizer, DPA 1…n, Perylene); any other molecule has **Whole molecule**.
+
+Each one has its own excited state E (`src/excited-states.js`): **on/off**, **colour**, **brightness** and
+**spread** (Gaussian width in Å). Click a molecule in the list (or one of its atoms in the 3D view) to select
+it; the editor below the list changes only that one, and every other molecule keeps what was set for it. The
+dot beside each name switches it on and off, `E` toggles the selected one, and **All on / All off** switch the
+whole object. States are remembered per example and per name, so changing n keeps DPA 1's state, and
+switching to another example and back restores them. Default colours: sensitizer orange, DPA blue, emitter
+cyan. In dev builds `__excite.set('DPA 2', { on: true }); __updateGlow()` drives it from the console, the hook
+for a later time-based simulation.
 
 - **Where it glows**: each atom's share of the lowest π→π* excitation, (c²_HOMO + c²_LUMO) / 2, from Hückel
   theory on the 3D structure (`src/excitation.js`). Resonance integrals are scaled by p-orbital overlap

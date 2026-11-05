@@ -20,7 +20,7 @@ const range = (start, n) => Array.from({ length: n }, (_, i) => start + i);
 function dpaSites(w, n, offset = 0) {
   const step = w.dpa.length + w.linker.length;
   return range(0, n).map((k) => ({
-    label: n === 1 ? 'DPA' : `DPA ${k + 1}`,
+    label: `DPA ${k + 1}`, // numbered even when n = 1, so an excited unit stays excited as n changes
     kind: 'mediator',
     atoms: range(offset + k * step, w.dpa.length),
   }));

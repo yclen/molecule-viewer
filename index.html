@@ -36,15 +36,25 @@
       </section>
 
       <section id="excite" hidden>
-        <div class="label">Excited state <span class="hint">click to excite · E toggles</span></div>
-        <div id="site-chips" class="tabs"></div>
-        <div class="slider-grid">
-          <span>Brightness</span><input type="range" id="glow-gain" min="0.2" max="3" step="0.05" value="1" />
-          <span id="glow-gain-val" class="val"></span>
-          <span>Spread</span><input type="range" id="glow-sigma" min="0.5" max="2.5" step="0.05" value="1.1" />
-          <span id="glow-sigma-val" class="val"></span>
-          <span>Colour</span><input type="color" id="glow-color" value="#3d8bff" />
-          <span></span>
+        <div class="label">Excited states <span class="hint">click one to edit · E toggles it</span></div>
+        <ul id="site-list"></ul>
+        <div id="site-editor">
+          <div class="editor-head">
+            <span id="edit-name"></span>
+            <label class="check"><input type="checkbox" id="edit-on" /> Excited</label>
+          </div>
+          <div class="slider-grid">
+            <span>Colour</span><input type="color" id="glow-color" value="#3d8bff" />
+            <span></span>
+            <span>Brightness</span><input type="range" id="glow-gain" min="0.2" max="3" step="0.05" value="1" />
+            <span id="glow-gain-val" class="val"></span>
+            <span>Spread</span><input type="range" id="glow-sigma" min="0.5" max="2.5" step="0.05" value="1.1" />
+            <span id="glow-sigma-val" class="val"></span>
+          </div>
+        </div>
+        <div class="row spaced">
+          <button id="excite-all-on" class="small">All on</button>
+          <button id="excite-all-off" class="small">All off</button>
         </div>
         <div id="excite-note" class="muted param-note"></div>
       </section>

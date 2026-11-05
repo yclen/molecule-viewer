@@ -87,6 +87,7 @@ export class MoleculeViewer {
     // excited-state glow (drawn in its own passes, see glow.js)
     this.glow = new GlowLayer(renderer);
     this.group.add(this.glow.mesh);
+    this._fitGlowToStyle();
     this.clock = new THREE.Clock();
 
     // --- hover picking ----------------------------------------------------
@@ -219,6 +220,7 @@ export class MoleculeViewer {
     if (!STYLES[style] || style === this.style) return;
     this.style = style;
     this._rebuild();
+    this._fitGlowToStyle();
     // Bigger atoms (e.g. space-filling) may no longer fit: back the camera off, keeping the rotation.
     const need = this._fitDistance();
     const cam = this.camera;
@@ -229,14 +231,24 @@ export class MoleculeViewer {
     }
   }
 
-  /** Excited-state glow sources: [{ x, y, z, weight, color }] in molecule coordinates ([] = off). */
+  /** Excited-state glow sources: [{ x, y, z, weight, color, sigma }] in molecule coordinates ([] = off). */
   setGlow(sources) {
     this.glow.setSources(sources);
   }
 
-  /** { sigma (Å), gain } for the glow. */
+  /** Global { sigma, gain } multipliers for the glow (each source also has its own). */
   setGlowParams(params) {
     this.glow.setParams(params);
+  }
+
+  /**
+   * Keep the glow just behind the front of a carbon atom in the current style: backlit for ball & stick,
+   * and still visible with space-filling spheres (which would otherwise bury it completely).
+   */
+  _fitGlowToStyle() {
+    const rC = STYLES[this.style].atomRadius(getElement('C'));
+    // big spheres (space-filling): the H atoms sit ~1 Å in front of the carbons, so put the glow past them
+    this.glow.setParams({ push: rC >= 1 ? rC + 1.0 : Math.max(0.15, rC - 0.25) });
   }
 
   setShowHydrogens(show) {
@@ -513,6 +525,9 @@ export class MoleculeViewer {
     const w = this.container.clientWidth;
     const h = this.container.clientHeight;
     if (!w || !h) return;
+    // follow display-scale changes (e.g. the window moved to another monitor)
+    const pr = Math.min(window.devicePixelRatio, 2);
+    if (pr !== this.renderer.getPixelRatio()) this.renderer.setPixelRatio(pr);
     this.renderer.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.setViewOffset(w, h, -this._effectiveInset() / 2, 0, w, h);
