@@ -123,6 +123,9 @@ button.step { width: 30px; padding: 5px 0; font-size: 15px; line-height: 1; }
 #param-slider { flex: 1; min-width: 0; margin-left: 6px; accent-color: var(--accent); }
 .param-note { margin-top: 6px; font-size: 12px; }
 
+/* ---------- sensitizer swap ---------- */
+#sens-select { width: 100%; }
+
 /* ---------- excited state ---------- */
 #site-list { list-style: none; margin: 0 -6px 8px; padding: 0; max-height: 200px; overflow-y: auto; }
 #site-list li {

@@ -2,6 +2,8 @@
 // a molecular wire has). The geometry of each repeating piece is computed offline (tools/build_wire.py,
 // saved as samples/<tab>/*.param.json); here we only stack copies, so any size builds instantly.
 
+import { planAttachment, placeSensitizer } from './attach.js';
+
 const rel = (path) => path.replace('../samples/', '');
 const DATA = Object.fromEntries(
   Object.entries(import.meta.glob('../samples/*/*.param.json', { import: 'default', eager: true })).map(
@@ -36,6 +38,34 @@ function wireCore(w, n) {
   return atoms;
 }
 
+const plans = new Map(); // "<sensitizer key>|wire" or "|zero" -> attachment plan (reused for every n)
+
+/**
+ * Replace the sensitizer atoms `sensIdx` of end-group rows with `swap` ({ key, atoms: [[symbol, [x, y, z]]] }).
+ * Returns { rows, sens, core, map (old kept index -> new index), plan }; the new sensitizer comes first.
+ */
+function swapSensitizer(rows0, sensIdx, swap, context, variant) {
+  const key = `${swap.key}|${variant}`;
+  if (!plans.has(key)) plans.set(key, planAttachment(rows0, sensIdx, swap.atoms, context));
+  const plan = plans.get(key);
+  const placed = placeSensitizer(swap.atoms, plan);
+  const old = new Set(sensIdx);
+  const map = new Map();
+  const kept = [];
+  rows0.forEach((r, i) => {
+    if (old.has(i)) return;
+    map.set(i, placed.length + kept.length);
+    kept.push(r);
+  });
+  return {
+    rows: [...placed, ...kept],
+    sens: range(0, placed.length),
+    core: range(0, placed.length).filter((i) => placed[i][0] !== 'H'),
+    map,
+    plan,
+  };
+}
+
 const BUILDERS = {
   /**
    * n DPA units, anthracene C2 -> 1,4-phenylene -> C6 of the next one, H on both ends.
@@ -59,43 +89,62 @@ const BUILDERS = {
    * Sensitizer -(C6H4)- [DPA -(C6H4)-] x n - perylene. For n >= 1: the DPA wire core plus two end groups
    * (left in the first DPA's frame, right in the last DPA's frame). n = 0 is a separately built molecule.
    */
-  'tta-flora'(d, n, load) {
-    let atoms, sens, pery, sites;
+  'tta-flora'(d, n, load, { sensitizer: swap } = {}) {
+    let atoms, sens, pery, sites, plan;
     if (n === 0) {
-      atoms = rows(d.zero);
-      sens = d.zeroLeftCore.map((i) => atoms[i][1]);
-      pery = d.zeroRightCore.map((i) => atoms[i][1]);
+      let zero = d.zero;
+      let zSens = d.zeroSens;
+      let zCore = d.zeroLeftCore;
+      let remap = (i) => i;
+      if (swap) {
+        const s = swapSensitizer(d.zero, d.zeroSens, swap, [], 'zero');
+        ({ rows: zero, sens: zSens, core: zCore, plan } = s);
+        remap = (i) => s.map.get(i);
+      }
+      atoms = rows(zero);
+      sens = zCore.map((i) => atoms[i][1]);
+      pery = d.zeroRightCore.map((i) => atoms[remap(i)][1]);
       sites = [
-        { label: 'Sensitizer', kind: 'sensitizer', atoms: d.zeroSens },
-        { label: 'Perylene', kind: 'emitter', atoms: d.zeroEmit },
+        { label: 'Sensitizer', kind: 'sensitizer', atoms: zSens },
+        { label: 'Perylene', kind: 'emitter', atoms: d.zeroEmit.map(remap) },
       ];
     } else {
       const w = load(d.wire);
-      const left = rows(d.left);
       const core = wireCore(w, n);
+      let leftRows = d.left;
+      let lSens = d.leftSens;
+      let lCore = d.leftCore;
+      if (swap) ({ rows: leftRows, sens: lSens, core: lCore, plan } = swapSensitizer(d.left, d.leftSens, swap, core, 'wire'));
+      const left = rows(leftRows);
       const right = rows(d.right, n - 1, w.t);
-      sens = d.leftCore.map((i) => left[i][1]);
+      sens = lCore.map((i) => left[i][1]);
       pery = d.rightCore.map((i) => right[i][1]);
       atoms = [...left, ...core, ...right];
       sites = [
-        { label: 'Sensitizer', kind: 'sensitizer', atoms: d.leftSens },
+        { label: 'Sensitizer', kind: 'sensitizer', atoms: lSens },
         ...dpaSites(w, n, left.length),
         { label: 'Perylene', kind: 'emitter', atoms: d.rightEmit.map((i) => left.length + core.length + i) },
       ];
     }
     const sep = dist(centroid(sens), centroid(pery));
     const what = n === 0 ? 'no mediator (one linker)' : `${n} DPA mediator${n > 1 ? 's' : ''}`;
+    const who = swap ? swap.name : 'Sensitizer';
+    const method = swap ? `${swap.name} placed rigidly on the phenylene (src/attach.js); rest: ${d.method}` : d.method;
     return {
       atoms,
       sites,
-      comment: `Sensitizer–perylene, ${what} | ${(sep / 10).toFixed(2)} nm core to core | ${d.method}`,
-      note: `Sensitizer ↔ perylene: ${(sep / 10).toFixed(2)} nm (core centre to centre)`,
+      comment: `${who}–perylene, ${what} | ${(sep / 10).toFixed(2)} nm core to core | ${method}`,
+      note: `${who} ↔ perylene: ${(sep / 10).toFixed(2)} nm (core centre to centre)`,
+      attach: plan && { atom: plan.attachC + 1, symbol: swap.atoms[plan.attachC][0] },
     };
   },
 };
 
-/** Build a parametric example. Returns { text (XYZ), note, sites } or throws. */
-export function buildParametric(tab, param, value) {
+/**
+ * Build a parametric example. Returns { text (XYZ), note, sites, attach } or throws.
+ * options.sensitizer: { key, name, atoms: [[symbol, [x, y, z]]] } swaps the sensitizer (TTA Flora).
+ */
+export function buildParametric(tab, param, value, options = {}) {
   const load = (file) => {
     const data = DATA[`${tab}/${file}`];
     if (!data) throw new Error(`geometry data ${tab}/${file} is missing`);
@@ -104,9 +153,9 @@ export function buildParametric(tab, param, value) {
   const data = load(param.data);
   const build = BUILDERS[data.builder];
   if (!build) throw new Error(`unknown builder "${data.builder}"`);
-  const { atoms, comment, note, sites } = build(data, value, load);
+  const { atoms, comment, note, sites, attach } = build(data, value, load, options);
   const lines = atoms.map(([s, p]) => `${s.padEnd(2)} ${p.map((v) => v.toFixed(4).padStart(11)).join(' ')}`);
-  return { text: `${atoms.length}\n${comment}\n${lines.join('\n')}\n`, note, sites };
+  return { text: `${atoms.length}\n${comment}\n${lines.join('\n')}\n`, note, sites, attach };
 }
 
 export const clampParam = (param, v) => Math.min(param.max, Math.max(param.min, Math.round(Number(v) || param.min)));

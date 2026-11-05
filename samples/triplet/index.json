@@ -23,6 +23,14 @@
       "min": 0,
       "max": 20,
       "default": 2
+    },
+    "sensitizers": {
+      "original": "Bis-triarylamine thienoquinoxaline dioxide (original)",
+      "from": [
+        "uc-sens",
+        "tta/ptoep.xyz",
+        "tadf/dmac-trz.xyz"
+      ]
     }
   }
 ]

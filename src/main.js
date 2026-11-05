@@ -116,21 +116,90 @@ function loadParametric(tab, entry, value) {
   const key = `${tab}/${entry.file}`;
   const p = entry.param;
   value = clampParam(p, value);
+  const sens = entry.sensitizers ? sensitizerFor(key, entry) : null;
   let built;
   try {
-    built = buildParametric(tab, p, value);
+    built = buildParametric(tab, p, value, { sensitizer: sens });
   } catch (err) {
-    return toast(`Couldn't build ${entry.name}: ${err.message}`);
+    return toast(`Couldn't build ${entry.name}${sens ? ` with ${sens.name}` : ''}: ${err.message}`);
   }
-  if (!loadText(built.text, `${entry.name} (${p.symbol ?? 'n'} = ${value})`, built.sites, key)) return;
+  const name = `${entry.name} (${p.symbol ?? 'n'} = ${value}${sens ? `, ${sens.name}` : ''})`;
+  if (!loadText(built.text, name, built.sites, key)) return;
   paramValues.set(key, value);
   setActiveExample(key);
   setParamObject({ tab, entry }, value, built.note);
+  showSensitizers(key, entry, built.attach);
 }
+
+// ---------------------------------------------------------------------------
+// Sensitizer swap: objects with a "sensitizers" entry (TTA Flora) can take any sensitizer from the sample
+// library in place of their own. sensitizers.from lists sample tabs ("uc-sens") or files ("tta/ptoep.xyz").
+// ---------------------------------------------------------------------------
+
+const sensChoice = new Map(); // "<tab>/<file>" of the object -> chosen sample key ('' = the original)
+const sensAtoms = new Map(); // sample key -> [[symbol, [x, y, z]]]
+
+function sensitizerOptions(entry) {
+  const groups = [];
+  for (const src of entry.sensitizers.from) {
+    const [tab, file] = src.split('/');
+    const label = TABS.find((t) => t.id === tab)?.label ?? tab;
+    const items = (TAB_INDEX[tab] ?? [])
+      .filter((e) => !e.param && (!file || e.file === file) && SAMPLE_TEXT[`${tab}/${e.file}`] !== undefined)
+      .map((e) => ({ key: `${tab}/${e.file}`, name: e.name.replace(/\s*\(sensitizer\)$/i, ''), desc: e.description }));
+    const g = groups.find((x) => x.label === label);
+    if (g) g.items.push(...items);
+    else if (items.length) groups.push({ label, items });
+  }
+  return groups;
+}
+
+function sensitizerFor(objKey, entry) {
+  const key = sensChoice.get(objKey);
+  if (!key) return null;
+  if (!sensAtoms.has(key)) {
+    sensAtoms.set(key, parseXYZ(SAMPLE_TEXT[key])[0].atoms.map((a) => [a.symbol, [a.x, a.y, a.z]]));
+  }
+  const name = sensitizerOptions(entry).flatMap((g) => g.items).find((i) => i.key === key)?.name ?? key;
+  return { key, name, atoms: sensAtoms.get(key) };
+}
+
+let sensFor = null; // object key the dropdown is showing
+function showSensitizers(objKey, entry, attach) {
+  const box = $('sensitizer');
+  box.hidden = !entry?.sensitizers;
+  if (box.hidden) return;
+  const sel = $('sens-select');
+  if (sensFor !== objKey) {
+    sensFor = objKey;
+    const orig = Object.assign(document.createElement('option'), { value: '', textContent: entry.sensitizers.original });
+    sel.replaceChildren(
+      orig,
+      ...sensitizerOptions(entry).map((g) => {
+        const og = Object.assign(document.createElement('optgroup'), { label: g.label });
+        og.append(...g.items.map((i) => Object.assign(document.createElement('option'), { value: i.key, textContent: i.name, title: i.desc ?? '' })));
+        return og;
+      }),
+    );
+  }
+  sel.value = sensChoice.get(objKey) ?? '';
+  $('sens-note').textContent = attach
+    ? `Linked through ${attach.symbol}${attach.atom} of its sample structure (the outermost free aromatic C–H) ` +
+      'to the phenylene, torsion set to avoid clashes. Rigid placement, not re-optimised.'
+    : 'As built in tools/build_triplet.py (conformer search + MMFF94s).';
+}
+
+$('sens-select').addEventListener('change', (e) => {
+  if (!paramObject) return;
+  sensChoice.set(sensFor, e.target.value);
+  loadParametric(paramObject.tab, paramObject.entry, curParam());
+  e.target.blur(); // so arrow keys step examples again rather than the dropdown
+});
 
 function setParamObject(obj, value, note) {
   paramObject = obj;
   $('params').hidden = !obj;
+  if (!obj) $('sensitizer').hidden = true;
   if (!obj) return;
   const p = obj.entry.param;
   $('param-label').textContent = p.label;

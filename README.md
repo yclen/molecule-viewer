@@ -109,7 +109,13 @@ number, or the `−` / `+` keys). The molecule rebuilds instantly and the panel 
 - **TTA Flora 4**: sensitizer – 1,4-phenylene – *n* DPA mediators (each followed by a 1,4-phenylene) –
   perylene (linked at C3). The sensitizer is 6,7-bis{4-[bis(4-methoxyphenyl)amino]phenyl}thieno[2,3-b]quinoxaline
   1,1-dioxide, linked at thiophene C2. *n* = 0 to 20; *n* = 0 is the direct sensitizer–linker–perylene dyad.
-  The panel shows the sensitizer-to-perylene distance.
+  The panel shows the sensitizer-to-perylene distance. The **Sensitizer** dropdown swaps in any sensitizer
+  from the library (Review: TADF sensitizers, PtOEP, DMAC-TRZ; the list is `sensitizers.from` in
+  `samples/triplet/index.json`). `src/attach.js` removes the original sensitizer from the end group and places
+  the new one rigidly, using its own sample geometry, on the free phenylene carbon. It attaches through the
+  outermost free aromatic C–H and picks the biaryl torsion that avoids clashes. The result isn't re-optimised.
+  A few crowded sensitizers (PtOEP, MR-1, BN-2Cz-tBu, BBCz-SB-Br) keep one H contact of
+  1.8–2.1 Å next to the new bond. The excited state of "Sensitizer" carries over when you swap.
 
 How it's built: both anthracene-2,6-diyl and *p*-phenylene are centrosymmetric, so a straight wire is one
 "DPA + linker" repeat unit copied along a fixed shift (13.2 Å). `tools/build_wire.py` (`npm run wire`)
