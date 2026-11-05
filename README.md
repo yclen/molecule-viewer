@@ -113,10 +113,12 @@ onExcite('Sensitizer', () => decay('Sensitizer', tau));
   `pause()` stops the clock.
 
 The presets are in `samples/sims/` (the first comment line is the name): **Walk along the molecule**,
-**Random sensitizer excitation**, and **TTA cascade**. TTA cascade runs on TTA Flora 4 and uses both states:
-absorption (sensitizer S₁), intersystem crossing (sensitizer T₁), triplet transfer to DPA 1, triplets hopping
-along the wire (DPA T₁), two triplets meeting (TTA → that DPA's S₁), singlet transfer to the perylene, and a
-perylene photon (perylene S₁).
+**Random sensitizer excitation**, and **TTA cascade**. TTA cascade runs on TTA Flora 4: the sensitizer gets
+excited at random (its T₁) and quickly hands the triplet to the nearest DPA. Triplets random-walk along the DPA
+chain, forward or back but never back onto the sensitizer. The perylene is a trap: a triplet that reaches it
+stays until a second one arrives, and then the perylene goes to S₁ (the upconverted photon). Two triplets that
+meet on a DPA annihilate there instead (homoTTA), and that DPA goes to S₁. A higher hop rate (`kHop`) gets
+triplets to the perylene sooner and cuts homoTTA.
 Edits are saved in the browser per script, and **Revert** goes back to the preset. Errors stop the run and
 show the message (an unknown site, an `every(0)`, or handlers that keep switching each other). Changing the
 molecule, or n, resets the run.
