@@ -43,6 +43,10 @@
 
       <section id="excite" hidden>
         <div class="label">Excited states <span class="hint">click one to edit · E toggles it</span></div>
+        <div id="mode-buttons" class="segmented mode">
+          <button data-mode="view" title="Switch excited states by hand">View</button>
+          <button data-mode="sim" title="Let a script switch excited states over time">Simulate</button>
+        </div>
         <ul id="site-list"></ul>
         <div id="site-editor">
           <div class="editor-head">
@@ -63,6 +67,27 @@
           <button id="excite-all-off" class="small">All off</button>
         </div>
         <div id="excite-note" class="muted param-note"></div>
+      </section>
+
+      <section id="sim" hidden>
+        <div class="label">Simulation <span id="sim-clock" class="hint">t = 0.00 s</span></div>
+        <div class="row">
+          <select id="sim-script" title="Script"></select>
+          <button id="sim-revert" class="small fit" title="Undo your edits to this script">Revert</button>
+        </div>
+        <textarea id="sim-code" spellcheck="false" autocomplete="off" wrap="off"></textarea>
+        <div class="row sim-controls">
+          <button id="sim-play" class="primary" title="Run / pause (Space)">▶ Run</button>
+          <button id="sim-step" title="Advance 0.1 s, then pause">Step</button>
+          <button id="sim-reset" title="Stop and put the excited states back as they were">Reset</button>
+        </div>
+        <div class="slider-grid sim-speed">
+          <span>Speed</span><input type="range" id="sim-speed" min="-1" max="1.3" step="0.01" value="0" />
+          <span id="sim-speed-val" class="val"></span>
+        </div>
+        <div id="sim-status" class="muted param-note"></div>
+        <dl id="sim-counters" hidden></dl>
+        <pre id="sim-log" hidden></pre>
       </section>
 
       <section id="info" hidden>

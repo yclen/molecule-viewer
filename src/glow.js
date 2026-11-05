@@ -22,6 +22,7 @@ const spriteVert = /* glsl */ `
   attribute float iWeight;
   attribute float iPhase;
   attribute float iSigma;
+  attribute float iLevel;
   uniform float uSigma;
   uniform float uTime;
   uniform float uPush;
@@ -35,7 +36,7 @@ const spriteVert = /* glsl */ `
     vR = position.xy * 4.0;              // distance from the centre in units of sigma
     // breathing pulse + a little per-atom shimmer
     float pulse = 1.0 + 0.16 * sin(6.2831853 * uTime / 1.9) + 0.07 * sin(4.7 * uTime + iPhase);
-    vColor = iColor * iWeight * uGain * pulse;
+    vColor = iColor * iWeight * iLevel * uGain * pulse;
     gl_Position = projectionMatrix * mv;
   }
 `;
@@ -84,6 +85,8 @@ export class GlowLayer {
     this.renderer = renderer;
     this.count = 0;
     this.time = 0;
+    this.groups = new Int32Array(0); // per source: which group (site) it belongs to
+    this.lit = false; // is any source's level above 0
 
     this.quad = new THREE.PlaneGeometry(2, 2);
     this.geo = this._spriteGeometry();
@@ -145,8 +148,9 @@ export class GlowLayer {
   }
 
   /**
-   * sources: [{ x, y, z, weight, color: THREE.Color, sigma? }] in molecule coordinates.
-   * weight carries the brightness (0..∞), sigma the Gaussian width in Å (default 1.1).
+   * sources: [{ x, y, z, weight, color: THREE.Color, sigma?, group? }] in molecule coordinates.
+   * weight carries the brightness (0..∞), sigma the Gaussian width in Å (default 1.1). group (default 0) ties
+   * the source to a level set with setLevels, e.g. one group per excited site, to fade it in and out cheaply.
    */
   setSources(sources) {
     const n = sources.length;
@@ -155,7 +159,10 @@ export class GlowLayer {
     const weight = new Float32Array(n);
     const phase = new Float32Array(n);
     const sigma = new Float32Array(n);
+    const level = new Float32Array(n).fill(1);
+    this.groups = new Int32Array(n);
     sources.forEach((s, i) => {
+      this.groups[i] = s.group ?? 0;
       center.set([s.x, s.y, s.z], i * 3);
       color.set([s.color.r, s.color.g, s.color.b], i * 3);
       weight[i] = s.weight;
@@ -171,8 +178,29 @@ export class GlowLayer {
     this.geo.setAttribute('iWeight', new THREE.InstancedBufferAttribute(weight, 1));
     this.geo.setAttribute('iPhase', new THREE.InstancedBufferAttribute(phase, 1));
     this.geo.setAttribute('iSigma', new THREE.InstancedBufferAttribute(sigma, 1));
+    this.geo.setAttribute('iLevel', new THREE.InstancedBufferAttribute(level, 1));
     this.geo.instanceCount = n;
     this.count = n;
+    this.lit = n > 0;
+  }
+
+  /** levels[group]: 0..1 brightness per group (missing = 0). Cheap: call it every frame while something fades. */
+  setLevels(levels) {
+    const attr = this.geo.getAttribute('iLevel');
+    if (!attr) return;
+    const a = attr.array;
+    let changed = false;
+    let lit = false;
+    for (let i = 0; i < this.count; i++) {
+      const v = levels[this.groups[i]] ?? 0;
+      if (a[i] !== v) {
+        a[i] = v;
+        changed = true;
+      }
+      if (v > 0) lit = true;
+    }
+    if (changed) attr.needsUpdate = true;
+    this.lit = lit;
   }
 
   /** sigma: global width multiplier; gain: global brightness multiplier; push: Å toward the camera (past the atom spheres). */
@@ -192,7 +220,7 @@ export class GlowLayer {
 
   /** Draw the glow over what is already on screen. Call after the normal scene render. */
   render(scene, camera, dt) {
-    if (!this.count) return;
+    if (!this.count || !this.lit) return;
     this.time += dt;
     this.spriteMat.uniforms.uTime.value = this.time;
     const r = this.renderer;

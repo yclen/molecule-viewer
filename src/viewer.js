@@ -236,6 +236,11 @@ export class MoleculeViewer {
     this.glow.setSources(sources);
   }
 
+  /** Per-group glow brightness 0..1 (see GlowLayer.setLevels). */
+  setGlowLevels(levels) {
+    this.glow.setLevels(levels);
+  }
+
   /** Global { sigma, gain } multipliers for the glow (each source also has its own). */
   setGlowParams(params) {
     this.glow.setParams(params);
@@ -544,8 +549,10 @@ export class MoleculeViewer {
       this.pointer.dirty = false;
       this._setHover(this._pick());
     }
+    const dt = Math.min(this.clock.getDelta(), 0.1);
+    this.onFrame?.(dt); // e.g. the simulation clock and glow fades
     this.renderer.render(this.scene, this.camera);
-    this.glow.render(this.scene, this.camera, Math.min(this.clock.getDelta(), 0.1));
+    this.glow.render(this.scene, this.camera, dt);
     this._placeLabels();
   }
 }

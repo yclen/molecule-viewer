@@ -38,6 +38,7 @@ Drop an `.xyz` file onto the page, use **Open file…**, or pick one of the buil
 | Play / pause trajectory | button or `Space` |
 | Atom info | hover an atom |
 | Excite / un-excite | the dot next to a molecule under **Excited states**, or `E` for the selected one |
+| Run / pause simulation | **Simulate** mode: button or `Space` |
 
 ## How it works
 
@@ -62,8 +63,7 @@ it; the editor below the list changes only that one, and every other molecule ke
 dot beside each name switches it on and off, `E` toggles the selected one, and **All on / All off** switch the
 whole object. States are remembered per example and per name, so changing n keeps DPA 1's state, and
 switching to another example and back restores them. Default colours: sensitizer orange, DPA blue, emitter
-cyan. In dev builds `__excite.set('DPA 2', { on: true }); __updateGlow()` drives it from the console, the hook
-for a later time-based simulation.
+cyan. In dev builds `__setOn('DPA 2', true)` drives it from the console.
 
 - **Where it glows**: each atom's share of the lowest π→π* excitation, (c²_HOMO + c²_LUMO) / 2, from Hückel
   theory on the 3D structure (`src/excitation.js`). Resonance integrals are scaled by p-orbital overlap
@@ -73,7 +73,42 @@ for a later time-based simulation.
 - **How it's drawn** (`src/glow.js`): every glowing atom is a camera-facing sprite with a Gaussian falloff,
   added up in an HDR buffer (the line-of-sight integral of a 3D Gaussian cloud). Atoms and bonds in front hide
   it, a quarter-resolution blur adds bloom to the glow only, and a `1 − exp(−I)` curve keeps faint regions
-  coloured and saturates dense ones toward white.
+  coloured and saturates dense ones toward white. Each chromophore's glow fades in and out (a per-site level in
+  the shader), so switching one on or off doesn't rebuild anything, and even a very short excitation shows as
+  a brief flash.
+
+## Simulation mode
+
+**View / Simulate** at the top of **Excited states** switches between setting states by hand and letting a
+script set them over time (`src/simulation.js`). A script is plain JavaScript, run once at t = 0. It starts
+background loops that a clock then runs: **Run / Pause** (`Space`), **Step** (0.1 s), **Reset** (stops and
+puts every state back as it was), and **Speed** (0.1×–20×). Time is in arbitrary "sim seconds".
+
+```js
+const kAbs = 0.8; // absorptions per second
+const tau = 1.2; // lifetime, s
+every(0.02, (dt) => {
+  if (!isOn('Sensitizer') && chance(kAbs, dt)) on('Sensitizer');
+});
+onExcite('Sensitizer', () => decay('Sensitizer', tau));
+```
+
+- **States**: `on`, `off`, `toggle`, `isOn`, `transfer(from, to)`, `set(label, { color, gain, sigma })`,
+  `sites(kind?)`, `kindOf`, `neighbors`.
+- **Time**: `now()`, `every(interval, fn(dt))`, `after(delay, fn)`, `at(time, fn)` (each returns `.stop()`),
+  `onExcite(who, fn)` / `onDecay(who, fn)` (who = a label, a kind, an array or `'*'`; clicks trigger them too),
+  `decay(label, tau)` (off after a random exponential lifetime, unless it was already switched off).
+- **Chance**: `chance(rate, dt)` is true with probability 1 − e^(−rate·dt), so results don't depend on the step
+  size. Also `random()`, `exponential(tau)`, `pick(array)`, `seed(n)` (repeatable runs).
+- **Output**: `count(name, n)`, `countOf(name)`, `show(name, value)`, `log(...)` show under the controls.
+  `pause()` stops the clock.
+
+The presets are in `samples/sims/` (the first comment line is the name): **Walk along the molecule**,
+**Random sensitizer excitation**, and **TTA cascade**. TTA cascade runs on TTA Flora 4: absorption, triplet
+transfer to DPA 1, triplets hopping along the wire, two triplets meeting (TTA), and a perylene photon.
+Edits are saved in the browser per script, and **Revert** goes back to the preset. Errors stop the run and
+show the message (an unknown site, an `every(0)`, or handlers that keep switching each other). Changing the
+molecule, or n, resets the run.
 
 ## Measuring
 
