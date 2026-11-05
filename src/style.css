@@ -122,6 +122,20 @@ button.step { width: 30px; padding: 5px 0; font-size: 15px; line-height: 1; }
 #param-input::-webkit-inner-spin-button, #param-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 #param-slider { flex: 1; min-width: 0; margin-left: 6px; accent-color: var(--accent); }
 .param-note { margin-top: 6px; font-size: 12px; }
+
+/* ---------- excited state ---------- */
+#site-chips button.excited {
+  background: rgba(61, 139, 255, 0.28); border-color: #6fb0ff; color: #fff;
+  box-shadow: 0 0 10px rgba(77, 160, 255, 0.55);
+}
+.slider-grid { display: grid; grid-template-columns: auto 1fr 44px; gap: 6px 8px; align-items: center; font-size: 12px; }
+.slider-grid > span:nth-child(3n + 1) { color: var(--muted); }
+.slider-grid input[type='range'] { width: 100%; accent-color: var(--accent); }
+.slider-grid input[type='color'] {
+  width: 100%; height: 22px; padding: 0; border: 1px solid var(--border); border-radius: 5px;
+  background: none; cursor: pointer;
+}
+.slider-grid .val { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
 #play-btn { width: 36px; padding: 6px 0; }
 #frame-label { text-transform: none; letter-spacing: 0; }
 

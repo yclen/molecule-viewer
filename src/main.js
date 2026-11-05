@@ -4,6 +4,8 @@ import { parseXYZ } from './parser.js';
 import { detectBonds } from './bonds.js';
 import { hillFormula } from './elements.js';
 import { buildParametric, clampParam } from './parametric.js';
+import { excitationWeights } from './excitation.js';
+import { Color } from 'three';
 import TABS from '../samples/tabs.json';
 import faviconUrl from '../assets/favicon.png?inline';
 
@@ -27,6 +29,7 @@ const TAB_INDEX = Object.fromEntries(
 
 const $ = (id) => document.getElementById(id);
 const viewer = new MoleculeViewer($('viewport'));
+if (import.meta.env.DEV) window.__viewer = viewer; // console access while developing
 
 // Keep the molecule centred in the area not covered by the side panel.
 const panel = $('panel');
@@ -52,7 +55,7 @@ const bondsFor = (i) => (state.bonds[i] ??= detectBonds(state.frames[i].atoms));
 // Loading
 // ---------------------------------------------------------------------------
 
-function loadText(text, name) {
+function loadText(text, name, sites = null) {
   let frames;
   try {
     frames = parseXYZ(text);
@@ -64,6 +67,7 @@ function loadText(text, name) {
   Object.assign(state, { name, frames, bonds: new Array(frames.length), frame: 0 });
   setPicked([]);
   viewer.setMolecule(frames[0].atoms, bondsFor(0));
+  setSites(sites ?? [{ label: 'Whole molecule', kind: 'molecule', atoms: frames[0].atoms.map((_, i) => i) }]);
   $('empty-state').hidden = true;
   $('info').hidden = false;
   setupFrames();
@@ -116,7 +120,7 @@ function loadParametric(tab, entry, value) {
   } catch (err) {
     return toast(`Couldn't build ${entry.name}: ${err.message}`);
   }
-  if (!loadText(built.text, `${entry.name} (${p.symbol ?? 'n'} = ${value})`)) return;
+  if (!loadText(built.text, `${entry.name} (${p.symbol ?? 'n'} = ${value})`, built.sites)) return;
   paramValues.set(key, value);
   setActiveExample(key);
   setParamObject({ tab, entry }, value, built.note);
@@ -277,6 +281,7 @@ function showFrame(i) {
   updateFrameLabel();
   updateInfo();
   updateMeasure(); // measurements follow the trajectory
+  updateGlow(); // so does the glow
 }
 
 function startPlayback() {
@@ -462,12 +467,96 @@ window.addEventListener('keydown', (e) => {
     setShowHydrogens(!$('show-h').checked);
   } else if (k === 'r') viewer.fitView();
   else if (k === 'o') fileInput.click();
+  else if (k === 'e' && excite.sites.length) toggleDefaultSite();
   else if (paramObject && SIZE_KEYS[e.code] !== undefined) setParamValue(curParam() + SIZE_KEYS[e.code]);
   else if (k === ' ' && state.frames.length > 1) {
     e.preventDefault();
     state.timer ? stopPlayback() : startPlayback();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Excited state: a glowing Gaussian cloud on the excited chromophore(s)
+// ---------------------------------------------------------------------------
+
+const excite = {
+  sites: [], // [{ label, kind, atoms }]
+  on: new Set(), // labels of excited sites (kept when the molecule is rebuilt, e.g. a new n)
+  weights: new Map(), // label -> { atoms, weights, method } for the current molecule
+  color: new Color('#3d8bff'),
+};
+
+function setSites(sites) {
+  excite.sites = sites;
+  excite.weights.clear();
+  const labels = new Set(sites.map((s) => s.label));
+  for (const l of [...excite.on]) if (!labels.has(l)) excite.on.delete(l);
+  $('site-chips').replaceChildren(
+    ...sites.map((s) => {
+      const b = document.createElement('button');
+      b.textContent = s.label;
+      b.dataset.label = s.label;
+      b.addEventListener('click', () => toggleSite(s.label));
+      return b;
+    }),
+  );
+  $('excite').hidden = false;
+  updateGlow();
+}
+
+function toggleSite(label) {
+  if (excite.on.has(label)) excite.on.delete(label);
+  else excite.on.add(label);
+  updateGlow();
+}
+
+/** E key: switch everything off, or excite the first DPA (or the first site if there is no DPA). */
+function toggleDefaultSite() {
+  if (excite.on.size) excite.on.clear();
+  else excite.on.add((excite.sites.find((s) => s.label.startsWith('DPA')) ?? excite.sites[0]).label);
+  updateGlow();
+}
+
+function siteWeights(site) {
+  if (!excite.weights.has(site.label)) {
+    excite.weights.set(site.label, excitationWeights(state.frames[0].atoms, bondsFor(0), site.atoms));
+  }
+  return excite.weights.get(site.label);
+}
+
+function updateGlow() {
+  const atoms = state.frames[state.frame]?.atoms ?? [];
+  const sources = [];
+  const methods = new Set();
+  for (const site of excite.sites) {
+    if (!excite.on.has(site.label)) continue;
+    const w = siteWeights(site);
+    w.atoms.forEach((i, k) => {
+      if (w.weights[k] > 0.02) sources.push({ ...atoms[i], weight: w.weights[k], color: excite.color });
+    });
+    methods.add(w.method);
+  }
+  viewer.setGlow(sources);
+  for (const b of $('site-chips').children) b.classList.toggle('excited', excite.on.has(b.dataset.label));
+  $('excite-note').textContent = methods.size
+    ? `Glow follows the π density of the lowest excitation (${[...methods].join(', ')}, twist-corrected).`
+    : '';
+}
+
+function setGlowParams() {
+  const gain = Number($('glow-gain').value);
+  const sigma = Number($('glow-sigma').value);
+  viewer.setGlowParams({ gain, sigma });
+  $('glow-gain-val').textContent = `${gain.toFixed(2)}×`;
+  $('glow-sigma-val').textContent = `${sigma.toFixed(1)} Å`;
+}
+$('glow-gain').addEventListener('input', setGlowParams);
+$('glow-sigma').addEventListener('input', setGlowParams);
+$('glow-color').addEventListener('input', (e) => {
+  excite.color.set(e.target.value);
+  updateGlow();
+});
+setGlowParams();
 
 // ---------------------------------------------------------------------------
 // Toast

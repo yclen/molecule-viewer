@@ -5,6 +5,7 @@ import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { getElement } from './elements.js';
+import { DEPTH_LAYER, GlowLayer } from './glow.js';
 
 /** Display styles. Radii are in Å. */
 export const STYLES = {
@@ -82,6 +83,11 @@ export class MoleculeViewer {
     this.halo.visible = false;
     this.halo.renderOrder = 1;
     this.group.add(this.halo);
+
+    // excited-state glow (drawn in its own passes, see glow.js)
+    this.glow = new GlowLayer(renderer);
+    this.group.add(this.glow.mesh);
+    this.clock = new THREE.Clock();
 
     // --- hover picking ----------------------------------------------------
     this.raycaster = new THREE.Raycaster();
@@ -223,6 +229,16 @@ export class MoleculeViewer {
     }
   }
 
+  /** Excited-state glow sources: [{ x, y, z, weight, color }] in molecule coordinates ([] = off). */
+  setGlow(sources) {
+    this.glow.setSources(sources);
+  }
+
+  /** { sigma (Å), gain } for the glow. */
+  setGlowParams(params) {
+    this.glow.setParams(params);
+  }
+
   setShowHydrogens(show) {
     this.showHydrogens = show;
     this._rebuild();
@@ -352,6 +368,7 @@ export class MoleculeViewer {
     });
     atomMesh.instanceMatrix.needsUpdate = true;
     if (atomMesh.instanceColor) atomMesh.instanceColor.needsUpdate = true;
+    atomMesh.layers.enable(DEPTH_LAYER); // atoms hide the glow behind them
     this._add(atomMesh);
     this.atomMesh = atomMesh;
 
@@ -397,6 +414,7 @@ export class MoleculeViewer {
       }
       mesh.instanceMatrix.needsUpdate = true;
       mesh.instanceColor.needsUpdate = true;
+      mesh.layers.enable(DEPTH_LAYER);
       this._add(mesh);
     }
 
@@ -501,6 +519,8 @@ export class MoleculeViewer {
     this.camera.updateProjectionMatrix();
     this.controls.handleResize();
     this.lineMat.resolution.set(w, h);
+    const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    this.glow.setSize(size.x, size.y);
   }
 
   _tick() {
@@ -510,6 +530,7 @@ export class MoleculeViewer {
       this._setHover(this._pick());
     }
     this.renderer.render(this.scene, this.camera);
+    this.glow.render(this.scene, this.camera, Math.min(this.clock.getDelta(), 0.1));
     this._placeLabels();
   }
 }

@@ -14,6 +14,18 @@ const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 const centroid = (pts) => [0, 1, 2].map((c) => pts.reduce((s, p) => s + p[c], 0) / pts.length);
 const rows = (list, k = 0, t = [0, 0, 0]) => list.map(([s, ...p]) => [s, add(p, t, k)]);
 
+const range = (start, n) => Array.from({ length: n }, (_, i) => start + i);
+
+/** Sites (for the excited-state glow) of the DPA units in a wire core that starts at atom `offset`. */
+function dpaSites(w, n, offset = 0) {
+  const step = w.dpa.length + w.linker.length;
+  return range(0, n).map((k) => ({
+    label: n === 1 ? 'DPA' : `DPA ${k + 1}`,
+    kind: 'mediator',
+    atoms: range(offset + k * step, w.dpa.length),
+  }));
+}
+
 /** The DPA wire core: n DPA units with n - 1 linkers between them (no end caps). */
 function wireCore(w, n) {
   const atoms = [];
@@ -37,6 +49,7 @@ const BUILDERS = {
     const length = dist(capL, capR);
     return {
       atoms,
+      sites: dpaSites(d, n),
       comment: `${n} × DPA-2,6-diyl joined by 1,4-phenylene, H-capped | ${length.toFixed(1)} Å end to end | ${d.method}`,
       note: `${(length / 10).toFixed(2)} nm end to end (H to H)`,
     };
@@ -47,30 +60,41 @@ const BUILDERS = {
    * (left in the first DPA's frame, right in the last DPA's frame). n = 0 is a separately built molecule.
    */
   'tta-flora'(d, n, load) {
-    let atoms, sens, pery;
+    let atoms, sens, pery, sites;
     if (n === 0) {
       atoms = rows(d.zero);
       sens = d.zeroLeftCore.map((i) => atoms[i][1]);
       pery = d.zeroRightCore.map((i) => atoms[i][1]);
+      sites = [
+        { label: 'Sensitizer', kind: 'sensitizer', atoms: d.zeroSens },
+        { label: 'Perylene', kind: 'emitter', atoms: d.zeroEmit },
+      ];
     } else {
       const w = load(d.wire);
       const left = rows(d.left);
+      const core = wireCore(w, n);
       const right = rows(d.right, n - 1, w.t);
       sens = d.leftCore.map((i) => left[i][1]);
       pery = d.rightCore.map((i) => right[i][1]);
-      atoms = [...left, ...wireCore(w, n), ...right];
+      atoms = [...left, ...core, ...right];
+      sites = [
+        { label: 'Sensitizer', kind: 'sensitizer', atoms: d.leftSens },
+        ...dpaSites(w, n, left.length),
+        { label: 'Perylene', kind: 'emitter', atoms: d.rightEmit.map((i) => left.length + core.length + i) },
+      ];
     }
     const sep = dist(centroid(sens), centroid(pery));
     const what = n === 0 ? 'no mediator (one linker)' : `${n} DPA mediator${n > 1 ? 's' : ''}`;
     return {
       atoms,
+      sites,
       comment: `Sensitizer–perylene, ${what} | ${(sep / 10).toFixed(2)} nm core to core | ${d.method}`,
       note: `Sensitizer ↔ perylene: ${(sep / 10).toFixed(2)} nm (core centre to centre)`,
     };
   },
 };
 
-/** Build a parametric example. Returns { text (XYZ), note } or throws. */
+/** Build a parametric example. Returns { text (XYZ), note, sites } or throws. */
 export function buildParametric(tab, param, value) {
   const load = (file) => {
     const data = DATA[`${tab}/${file}`];
@@ -80,9 +104,9 @@ export function buildParametric(tab, param, value) {
   const data = load(param.data);
   const build = BUILDERS[data.builder];
   if (!build) throw new Error(`unknown builder "${data.builder}"`);
-  const { atoms, comment, note } = build(data, value, load);
+  const { atoms, comment, note, sites } = build(data, value, load);
   const lines = atoms.map(([s, p]) => `${s.padEnd(2)} ${p.map((v) => v.toFixed(4).padStart(11)).join(' ')}`);
-  return { text: `${atoms.length}\n${comment}\n${lines.join('\n')}\n`, note };
+  return { text: `${atoms.length}\n${comment}\n${lines.join('\n')}\n`, note, sites };
 }
 
 export const clampParam = (param, v) => Math.min(param.max, Math.max(param.min, Math.round(Number(v) || param.min)));

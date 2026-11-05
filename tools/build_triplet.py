@@ -276,6 +276,11 @@ def main():
         "rightCore": [j for j, (k, loc) in enumerate(rkeys) if k == "E" and right[j][0] == "C"],
         "zeroLeftCore": [j for j, (k, loc) in enumerate(zkeys) if k == "S" and loc in s_core0],
         "zeroRightCore": [j for j, (k, loc) in enumerate(zkeys) if k == "E" and zero[j][0] == "C"],
+        # atoms of each chromophore (sites for the excited-state glow)
+        "leftSens": [j for j, (k, _) in enumerate(lkeys) if k == "S"],
+        "rightEmit": [j for j, (k, _) in enumerate(rkeys) if k == "E"],
+        "zeroSens": [j for j, (k, _) in enumerate(zkeys) if k == "S"],
+        "zeroEmit": [j for j, (k, _) in enumerate(zkeys) if k == "E"],
     }
     assert len(data["leftCore"]) == len(data["zeroLeftCore"]) == 10 and len(data["rightCore"]) == 20
     OUT.write_text(json.dumps(data, separators=(",", ":")) + "\n", "utf-8")

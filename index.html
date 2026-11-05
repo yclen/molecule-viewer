@@ -35,6 +35,20 @@
         <div id="param-note" class="muted param-note"></div>
       </section>
 
+      <section id="excite" hidden>
+        <div class="label">Excited state <span class="hint">click to excite · E toggles</span></div>
+        <div id="site-chips" class="tabs"></div>
+        <div class="slider-grid">
+          <span>Brightness</span><input type="range" id="glow-gain" min="0.2" max="3" step="0.05" value="1" />
+          <span id="glow-gain-val" class="val"></span>
+          <span>Spread</span><input type="range" id="glow-sigma" min="0.5" max="2.5" step="0.05" value="1.1" />
+          <span id="glow-sigma-val" class="val"></span>
+          <span>Colour</span><input type="color" id="glow-color" value="#3d8bff" />
+          <span></span>
+        </div>
+        <div id="excite-note" class="muted param-note"></div>
+      </section>
+
       <section id="info" hidden>
         <div id="mol-name" class="name"></div>
         <div id="mol-formula" class="formula"></div>
@@ -70,7 +84,7 @@
       <footer>
         Drag to rotate · right-drag to pan · scroll to zoom<br />
         Click atoms to measure · drop an <code>.xyz</code> file anywhere<br />
-        Keys: 1–4 style · H hydrogens · R reset · ↑↓ examples · −/+ size
+        Keys: 1–4 style · H hydrogens · R reset · ↑↓ examples · −/+ size · E excite
       </footer>
     </aside>
 

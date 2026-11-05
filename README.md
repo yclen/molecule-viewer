@@ -37,6 +37,7 @@ Drop an `.xyz` file onto the page, use **Open file…**, or pick one of the buil
 | Open file | button or `O` |
 | Play / pause trajectory | button or `Space` |
 | Atom info | hover an atom |
+| Excite / un-excite | site buttons under **Excited state**, or `E` |
 
 ## How it works
 
@@ -49,6 +50,23 @@ Drop an `.xyz` file onto the page, use **Open file…**, or pick one of the buil
 - **`src/viewer.js`**: Three.js scene. Atoms and bonds are `InstancedMesh`es (one draw call each), so thousands
   of atoms stay smooth. Molecules are centred and rotated onto their principal axes, so flat molecules open face-on.
 - **`src/main.js`**: UI wiring (panel, file loading, drag & drop, trajectory playback, tooltip, shortcuts).
+
+## Excited state
+
+The **Excited state** section puts a glowing, pulsing Gaussian cloud on an excited chromophore. Parametric
+objects list their chromophores as buttons (Sensitizer, DPA 1…n, Perylene); any other molecule has **Whole
+molecule**. Brightness, spread (Gaussian width in Å) and colour are adjustable. `E` toggles the first DPA (or
+the first site) on and off.
+
+- **Where it glows**: each atom's share of the lowest π→π* excitation, (c²_HOMO + c²_LUMO) / 2, from Hückel
+  theory on the 3D structure (`src/excitation.js`). Resonance integrals are scaled by p-orbital overlap
+  (|n_i · n_j|), so twisted rings drop out by themselves: DPA's 90° phenyls stay dark and the glow sits on the
+  anthracene (C9/C10 brightest, fused carbons zero), and fluorescein's benzoate stays dark while the xanthene
+  glows. Heteroatoms use standard Hückel parameters. It is a qualitative picture, not a TD-DFT density.
+- **How it's drawn** (`src/glow.js`): every glowing atom is a camera-facing sprite with a Gaussian falloff,
+  added up in an HDR buffer (the line-of-sight integral of a 3D Gaussian cloud). Atoms and bonds in front hide
+  it, a quarter-resolution blur adds bloom to the glow only, and a `1 − exp(−I)` curve keeps faint regions
+  coloured and saturates dense ones toward white.
 
 ## Measuring
 
@@ -109,5 +127,6 @@ The icon in `assets/` comes from `tools/make_icon.py` (`npm run icon`).
 
 ## Roadmap
 
-- v2: atom labels, screenshot export, background options; optional GFN2-xTB refinement of the dye geometries
+- v2: atom labels, screenshot export, background options; optional GFN2-xTB refinement of the dye geometries;
+  per-state glow colours (singlet / triplet) and animated energy transfer along the TTA chain
 - v3: PDB / MOL / SDF formats (with explicit bond orders), double/triple bond rendering, ambient occlusion & outlines
