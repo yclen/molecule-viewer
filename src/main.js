@@ -5,7 +5,7 @@ import { detectBonds } from './bonds.js';
 import { hillFormula } from './elements.js';
 import { buildParametric, clampParam } from './parametric.js';
 import { excitationWeights } from './excitation.js';
-import { ExcitedStates } from './excited-states.js';
+import { ExcitedStates, STATES, STATE_NAME, STATE_SYMBOL, copyState } from './excited-states.js';
 import { Simulation } from './simulation.js';
 import { Color } from 'three';
 import TABS from '../samples/tabs.json';
@@ -541,7 +541,8 @@ window.addEventListener('keydown', (e) => {
     setShowHydrogens(!$('show-h').checked);
   } else if (k === 'r') viewer.fitView();
   else if (k === 'o') fileInput.click();
-  else if (k === 'e' && excite.sites.length) toggleSelectedSite();
+  else if (k === 'e' && excite.sites.length) toggleSelectedSite('S');
+  else if (k === 't' && excite.sites.length) toggleSelectedSite('T');
   else if (paramObject && SIZE_KEYS[e.code] !== undefined) setParamValue(curParam() + SIZE_KEYS[e.code]);
   else if (k === ' ' && simMode) {
     e.preventDefault();
@@ -553,24 +554,25 @@ window.addEventListener('keydown', (e) => {
 });
 
 // ---------------------------------------------------------------------------
-// Excited state: a glowing Gaussian cloud on the excited chromophore(s)
+// Excited states: a glowing Gaussian cloud on the excited chromophore(s)
 // ---------------------------------------------------------------------------
 
-// Each site (molecule / chromophore) has its own state E = { on, color, gain, sigma } (see excited-states.js).
-// One site is selected at a time; the editor below the list changes only that one, and every other site keeps
-// what was set for it.
+// Each site (molecule / chromophore) has two excited states, the singlet S₁ and the triplet T₁, each with its own
+// { on, color, gain, sigma } (see excited-states.js). One site is selected at a time; the editor below the list
+// changes only that one (both of its states), and every other site keeps what was set for it.
 //
 // Every ground ⇄ excited change goes through setOn(), whether from a click or a simulation script, so the
-// simulation hears about clicks too. The glow of each site fades toward its state (a level 0..1 per site, see
-// GlowLayer.setLevels): switching a site on or off is cheap, and even a very short excitation shows as a flash.
+// simulation hears about clicks too. The glow of each (site, state) fades toward its state (a level 0..1 per
+// glow group, see GlowLayer.setLevels): switching one on or off is cheap, and even a very short excitation shows
+// as a flash. Group of (site i, state) = 2i for S, 2i + 1 for T.
 const excite = new ExcitedStates();
 excite.key = null; // the current object's key
 excite.selected = null; // label of the site being edited
 excite.weights = new Map(); // label -> { atoms, weights, method } for the current molecule
-excite.levels = new Map(); // label -> displayed glow level, 0..1
-excite.litAt = new Map(); // label -> real time (s) it last went ground → excited
-excite.built = new Set(); // labels whose sprites are in the glow layer right now
-if (import.meta.env.DEV) window.__excite = excite; // e.g. __setOn('DPA 1', true)
+excite.levels = new Map(); // 'label|S' -> displayed glow level, 0..1
+excite.litAt = new Map(); // 'label|S' -> real time (s) it last went ground → excited
+excite.built = new Set(); // 'label|S' keys whose sprites are in the glow layer right now
+if (import.meta.env.DEV) window.__excite = excite; // e.g. __setOn('DPA 1', true, 'T')
 
 const FADE_IN = 0.04; // s (real time), time constant of the glow coming on
 const FADE_OUT = 0.25; // ... and going off
@@ -580,15 +582,17 @@ let realTime = 0;
 let glowDirty = true; // colours, sizes or atom positions changed: rebuild the glow sprites
 let listDirty = true; // on/off changed: refresh the site list
 
-/** The one place a site is excited or de-excited. */
-function setOn(label, on) {
-  const st = excite.get(label);
+const glowKey = (label, s) => `${label}|${s}`;
+
+/** The one place a state is switched on or off. state: 'S' (singlet, default) or 'T' (triplet). */
+function setOn(label, on, state = 'S') {
+  const st = excite.get(label, state);
   if (!st || st.on === on) return;
   st.on = on;
-  if (on) excite.litAt.set(label, realTime);
-  if (label === excite.selected) $('edit-on').checked = on;
+  if (on) excite.litAt.set(glowKey(label, state), realTime);
+  if (label === excite.selected) $(`edit-on-${state}`).checked = on;
   listDirty = true;
-  sim.notify(label, on);
+  sim.notify(label, on, state);
 }
 if (import.meta.env.DEV) window.__setOn = setOn;
 
@@ -596,23 +600,29 @@ function setSites(objectKey, sites) {
   excite.setSites(objectKey, sites);
   excite.key = objectKey;
   excite.weights.clear();
-  for (const s of sites) excite.levels.set(s.label, excite.get(s.label).on ? 1 : 0); // no fade on load
+  for (const s of sites) {
+    for (const k of STATES) excite.levels.set(glowKey(s.label, k), excite.get(s.label, k).on ? 1 : 0); // no fade on load
+  }
   $('site-list').replaceChildren(
     ...sites.map((s) => {
       const li = document.createElement('li');
       li.dataset.label = s.label;
       li.tabIndex = 0;
-      const sw = document.createElement('button');
-      sw.className = 'e-switch';
-      sw.title = 'Excite / de-excite';
-      sw.addEventListener('click', (e) => {
-        e.stopPropagation();
-        selectSite(s.label);
-        toggleSite(s.label);
+      const switches = STATES.map((k) => {
+        const sw = document.createElement('button');
+        sw.className = `e-switch e-switch-${k}`;
+        sw.textContent = k;
+        sw.title = `${STATE_NAME[k][0].toUpperCase()}${STATE_NAME[k].slice(1)} ${STATE_SYMBOL[k]}: excite / de-excite`;
+        sw.addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectSite(s.label);
+          toggleSite(s.label, k);
+        });
+        return sw;
       });
       const name = Object.assign(document.createElement('span'), { className: 'e-name', textContent: s.label });
       const st = Object.assign(document.createElement('span'), { className: 'e-state' });
-      li.append(sw, name, st);
+      li.append(...switches, name, st);
       li.addEventListener('click', () => selectSite(s.label));
       li.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') selectSite(s.label);
@@ -633,35 +643,37 @@ function setSites(objectKey, sites) {
 
 function selectSite(label) {
   excite.selected = label;
-  const st = excite.get(label);
   $('edit-name').textContent = label;
-  $('edit-on').checked = st.on;
-  $('glow-color').value = st.color;
-  $('glow-gain').value = st.gain;
-  $('glow-sigma').value = st.sigma;
+  for (const k of STATES) {
+    const st = excite.get(label, k);
+    $(`edit-on-${k}`).checked = st.on;
+    $(`glow-color-${k}`).value = st.color;
+    $(`glow-gain-${k}`).value = st.gain;
+    $(`glow-sigma-${k}`).value = st.sigma;
+  }
   updateGlow();
 }
 
-/** Change colour / brightness / spread of a site (not on/off: that's setOn). */
-function setProps(label, patch) {
-  const st = excite.get(label);
+/** Change colour / brightness / spread of one state of a site (not on/off: that's setOn). */
+function setProps(label, patch, state = 'S') {
+  const st = excite.get(label, state);
   if (!st) return;
   for (const k of ['color', 'gain', 'sigma']) if (patch[k] !== undefined) st[k] = patch[k];
   if (label === excite.selected) selectSite(label);
   else updateGlow();
 }
 
-function editSelected(patch) {
-  if (excite.selected) setProps(excite.selected, patch);
+function editSelected(state, patch) {
+  if (excite.selected) setProps(excite.selected, patch, state);
 }
 
-function toggleSite(label) {
-  setOn(label, !excite.get(label).on);
+function toggleSite(label, state = 'S') {
+  setOn(label, !excite.get(label, state).on, state);
 }
 
-/** E key: excite / de-excite the selected site. */
-function toggleSelectedSite() {
-  if (excite.selected) toggleSite(excite.selected);
+/** E / T keys: switch the selected site's singlet / triplet. */
+function toggleSelectedSite(state) {
+  if (excite.selected) toggleSite(excite.selected, state);
 }
 
 function siteWeights(site) {
@@ -675,28 +687,33 @@ function siteWeights(site) {
 function updateGlow() {
   glowDirty = true;
   listDirty = true;
-  const st = excite.selected && excite.get(excite.selected);
-  if (st) {
-    $('glow-gain-val').textContent = `${st.gain.toFixed(2)}×`;
-    $('glow-sigma-val').textContent = `${st.sigma.toFixed(1)} Å`;
+  if (!excite.selected) return;
+  for (const k of STATES) {
+    const st = excite.get(excite.selected, k);
+    $(`glow-gain-${k}-val`).textContent = `${st.gain.toFixed(2)}×`;
+    $(`glow-sigma-${k}-val`).textContent = `${st.sigma.toFixed(1)} Å`;
   }
 }
 if (import.meta.env.DEV) window.__updateGlow = updateGlow;
 
-/** Sprites for the sites in `visible`, each site its own level group (its index in excite.sites). */
+/** Sprites for the (site, state) keys in `visible`, each its own level group. */
 function rebuildGlow(visible) {
   const atoms = state.frames[state.frame]?.atoms ?? [];
   const sources = [];
   const methods = new Set();
-  excite.sites.forEach((site, group) => {
-    if (!visible.has(site.label)) return;
-    const st = excite.get(site.label);
-    const color = new Color(st.color);
-    const w = siteWeights(site);
-    w.atoms.forEach((i, k) => {
-      if (w.weights[k] > 0.02) sources.push({ ...atoms[i], weight: w.weights[k] * st.gain, sigma: st.sigma, color, group });
+  excite.sites.forEach((site, i) => {
+    STATES.forEach((k, j) => {
+      if (!visible.has(glowKey(site.label, k))) return;
+      const st = excite.get(site.label, k);
+      const color = new Color(st.color);
+      const group = 2 * i + j;
+      // both states glow where the lowest π→π* excitation sits: S₁ and T₁ share that HOMO/LUMO pair
+      const w = siteWeights(site);
+      w.atoms.forEach((a, n) => {
+        if (w.weights[n] > 0.02) sources.push({ ...atoms[a], weight: w.weights[n] * st.gain, sigma: st.sigma, color, group });
+      });
+      methods.add(w.method);
     });
-    methods.add(w.method);
   });
   viewer.setGlow(sources);
   excite.built = visible;
@@ -706,20 +723,23 @@ function rebuildGlow(visible) {
     : '';
 }
 
-/** Every frame: fade each site's glow toward its state, rebuilding the sprites only when needed. */
+/** Every frame: fade each glow toward its state, rebuilding the sprites only when needed. */
 function stepGlow(dt) {
   const levels = [];
   const visible = new Set();
-  excite.sites.forEach((site, k) => {
-    const st = excite.get(site.label);
-    const held = realTime - (excite.litAt.get(site.label) ?? -Infinity) < MIN_FLASH;
-    const target = st.on || held ? 1 : 0;
-    const prev = excite.levels.get(site.label) ?? 0;
-    let lvl = prev + (target - prev) * (1 - Math.exp(-dt / (target > prev ? FADE_IN : FADE_OUT)));
-    if (Math.abs(target - lvl) < 0.004) lvl = target;
-    excite.levels.set(site.label, lvl);
-    levels[k] = lvl;
-    if (target > 0 || lvl > 0) visible.add(site.label);
+  excite.sites.forEach((site, i) => {
+    STATES.forEach((k, j) => {
+      const key = glowKey(site.label, k);
+      const st = excite.get(site.label, k);
+      const held = realTime - (excite.litAt.get(key) ?? -Infinity) < MIN_FLASH;
+      const target = st.on || held ? 1 : 0;
+      const prev = excite.levels.get(key) ?? 0;
+      let lvl = prev + (target - prev) * (1 - Math.exp(-dt / (target > prev ? FADE_IN : FADE_OUT)));
+      if (Math.abs(target - lvl) < 0.004) lvl = target;
+      excite.levels.set(key, lvl);
+      levels[2 * i + j] = lvl;
+      if (target > 0 || lvl > 0) visible.add(key);
+    });
   });
   const same = visible.size === excite.built.size && [...visible].every((l) => excite.built.has(l));
   if (glowDirty || !same) rebuildGlow(visible);
@@ -728,24 +748,31 @@ function stepGlow(dt) {
 
 function updateSiteList() {
   for (const li of $('site-list').children) {
-    const st = excite.get(li.dataset.label);
+    const { S, T } = excite.get(li.dataset.label);
     li.classList.toggle('selected', li.dataset.label === excite.selected);
-    li.classList.toggle('excited', st.on);
-    li.style.setProperty('--e-color', st.color);
-    li.querySelector('.e-state').textContent = st.on ? 'excited' : 'ground';
+    li.classList.toggle('on-S', S.on);
+    li.classList.toggle('on-T', T.on);
+    li.style.setProperty('--s-color', S.color);
+    li.style.setProperty('--t-color', T.color);
+    li.style.setProperty('--e-color', T.on && !S.on ? T.color : S.color);
+    const text = [S.on && STATE_SYMBOL.S, T.on && STATE_SYMBOL.T].filter(Boolean).join(' + ');
+    li.querySelector('.e-state').textContent = text || 'ground';
   }
   listDirty = false;
 }
 
-$('edit-on').addEventListener('change', (e) => excite.selected && setOn(excite.selected, e.target.checked));
-$('glow-color').addEventListener('input', (e) => editSelected({ color: e.target.value }));
-$('glow-gain').addEventListener('input', (e) => editSelected({ gain: Number(e.target.value) }));
-$('glow-sigma').addEventListener('input', (e) => editSelected({ sigma: Number(e.target.value) }));
-for (const [id, on] of [['excite-all-on', true], ['excite-all-off', false]]) {
-  $(id).addEventListener('click', () => {
-    for (const s of excite.sites) setOn(s.label, on);
+for (const k of STATES) {
+  $(`edit-on-${k}`).addEventListener('change', (e) => excite.selected && setOn(excite.selected, e.target.checked, k));
+  $(`glow-color-${k}`).addEventListener('input', (e) => editSelected(k, { color: e.target.value }));
+  $(`glow-gain-${k}`).addEventListener('input', (e) => editSelected(k, { gain: Number(e.target.value) }));
+  $(`glow-sigma-${k}`).addEventListener('input', (e) => editSelected(k, { sigma: Number(e.target.value) }));
+  $(`excite-all-${k}`).addEventListener('click', () => {
+    for (const s of excite.sites) setOn(s.label, true, k);
   });
 }
+$('excite-all-off').addEventListener('click', () => {
+  for (const s of excite.sites) for (const k of STATES) setOn(s.label, false, k);
+});
 
 // ---------------------------------------------------------------------------
 // Simulation mode: scripts that switch excited states on and off over time (see simulation.js)
@@ -753,7 +780,7 @@ for (const [id, on] of [['excite-all-on', true], ['excite-all-off', false]]) {
 
 const sim = new Simulation({
   sites: () => excite.sites,
-  isOn: (label) => excite.get(label).on,
+  isOn: (label, s) => excite.get(label, s).on,
   setOn,
   setProps,
 });
@@ -852,7 +879,7 @@ function simStatus(msg) {
 }
 
 function simStart() {
-  simSnapshot = { key: excite.key, states: new Map([...excite.states].map(([l, st]) => [l, { ...st }])) };
+  simSnapshot = { key: excite.key, states: new Map([...excite.states].map(([l, st]) => [l, copyState(st)])) };
   for (const s of excite.sites) siteWeights(s); // so the first excitation of a big site doesn't stall the clock
   simNote = '';
   sim.start($('sim-code').value);
@@ -867,10 +894,12 @@ function simReset() {
     for (const [label, saved] of simSnapshot.states) {
       const st = states?.get(label);
       if (!st) continue;
-      const { on, ...props } = saved;
-      Object.assign(st, props);
-      if (here) setOn(label, on);
-      else st.on = on;
+      for (const k of STATES) {
+        const { on, ...props } = saved[k];
+        Object.assign(st[k], props);
+        if (here) setOn(label, on, k);
+        else st[k].on = on;
+      }
     }
     if (here && excite.selected) selectSite(excite.selected);
   }

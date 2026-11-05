@@ -130,25 +130,33 @@ button.step { width: 30px; padding: 5px 0; font-size: 15px; line-height: 1; }
 #site-list { list-style: none; margin: 0 -6px 8px; padding: 0; max-height: 200px; overflow-y: auto; }
 #site-list li {
   --e-color: #3d8bff;
-  display: flex; align-items: center; gap: 8px;
+  --s-color: #3d8bff;
+  --t-color: #ff3b2f;
+  display: flex; align-items: center; gap: 6px;
   padding: 4px 8px; border-radius: 7px; border: 1px solid transparent; cursor: pointer;
 }
 #site-list li:hover { background: var(--hover); }
 #site-list li:focus-visible { outline: 1px solid var(--accent); }
 #site-list li.selected { background: rgba(91, 157, 255, 0.16); border-color: rgba(91, 157, 255, 0.5); }
-.e-name { flex: 1; }
+.e-name { flex: 1; margin-left: 2px; }
 .e-state { color: var(--muted); font-size: 11px; }
-#site-list li.excited .e-state { color: var(--e-color); }
-/* on/off switch: hollow ring when off, filled and glowing in the site's colour when excited */
+#site-list li:is(.on-S, .on-T) .e-state { color: var(--e-color); }
+/* on/off switches, one per state (S, T): hollow ring when off, filled and glowing in the state's colour when on */
 .e-switch {
-  width: 16px; height: 16px; padding: 0; border-radius: 50%; flex: none;
-  border: 2px solid var(--e-color); background: transparent; opacity: 0.6;
+  --c: var(--s-color);
+  width: 17px; height: 17px; padding: 0; border-radius: 50%; flex: none;
+  border: 2px solid var(--c); background: transparent; opacity: 0.6;
+  font-size: 9px; font-weight: 700; line-height: 13px; text-align: center; color: var(--c);
 }
+.e-switch-T { --c: var(--t-color); }
 .e-switch:hover { background: rgba(255, 255, 255, 0.1); opacity: 1; }
-#site-list li.excited .e-switch { background: var(--e-color); opacity: 1; box-shadow: 0 0 8px var(--e-color); }
+#site-list li.on-S .e-switch-S,
+#site-list li.on-T .e-switch-T { background: var(--c); color: #10131a; opacity: 1; box-shadow: 0 0 8px var(--c); }
 #site-editor { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: rgba(255, 255, 255, 0.03); }
-.editor-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-#edit-name { font-weight: 600; }
+#edit-name { font-weight: 600; margin-bottom: 6px; }
+.state-block + .state-block { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.editor-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.state-title { font-size: 12px; font-weight: 600; color: var(--muted); }
 button.small { padding: 3px 10px; font-size: 12px; flex: 1; }
 #excite .row.spaced { margin-top: 8px; gap: 6px; }
 .slider-grid { display: grid; grid-template-columns: auto 1fr 44px; gap: 6px 8px; align-items: center; font-size: 12px; }

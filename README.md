@@ -37,7 +37,7 @@ Drop an `.xyz` file onto the page, use **Open file…**, or pick one of the buil
 | Open file | button or `O` |
 | Play / pause trajectory | button or `Space` |
 | Atom info | hover an atom |
-| Excite / un-excite | the dot next to a molecule under **Excited states**, or `E` for the selected one |
+| Excite / un-excite | the **S** / **T** dots next to a molecule under **Excited states**, or `E` (singlet) / `T` (triplet) for the selected one |
 | Run / pause simulation | **Simulate** mode: button or `Space` |
 
 ## How it works
@@ -57,13 +57,18 @@ Drop an `.xyz` file onto the page, use **Open file…**, or pick one of the buil
 The **Excited states** section puts a glowing, pulsing Gaussian cloud on excited chromophores. Parametric
 objects list their chromophores (Sensitizer, DPA 1…n, Perylene); any other molecule has **Whole molecule**.
 
-Each one has its own excited state E (`src/excited-states.js`): **on/off**, **colour**, **brightness** and
-**spread** (Gaussian width in Å). Click a molecule in the list (or one of its atoms in the 3D view) to select
-it; the editor below the list changes only that one, and every other molecule keeps what was set for it. The
-dot beside each name switches it on and off, `E` toggles the selected one, and **All on / All off** switch the
-whole object. States are remembered per example and per name, so changing n keeps DPA 1's state, and
-switching to another example and back restores them. Default colours: sensitizer orange, DPA blue, emitter
-cyan. In dev builds `__setOn('DPA 2', true)` drives it from the console.
+Each one has two excited states (`src/excited-states.js`), the **singlet S₁** and the **triplet T₁**, and each
+state has its own **on/off**, **colour**, **brightness** and **spread** (Gaussian width in Å). The two are
+independent: a molecule can have either, both or neither on, and their glows add up. Click a molecule in the
+list (or one of its atoms in the 3D view) to select it; the editor below the list shows both of its states and
+changes only that molecule, and every other molecule keeps what was set for it. The **S** and **T** dots beside
+each name switch the two states on and off, `E` / `T` toggle the selected molecule's singlet / triplet, and
+**All S₁ on / All T₁ on / All off** switch the whole object. States are remembered per example and per name, so
+changing n keeps DPA 1's states, and switching to another example and back restores them.
+
+Default colours: singlets are sensitizer orange, DPA blue and perylene cyan. Triplets are redder: the
+sensitizer's a slightly redder orange, DPA's and perylene's red. Both states glow over the same atoms (S₁ and T₁
+come from the same HOMO→LUMO pair). In dev builds `__setOn('DPA 2', true, 'T')` drives it from the console.
 
 - **Where it glows**: each atom's share of the lowest π→π* excitation, (c²_HOMO + c²_LUMO) / 2, from Hückel
   theory on the 3D structure (`src/excitation.js`). Resonance integrals are scaled by p-orbital overlap
@@ -73,9 +78,9 @@ cyan. In dev builds `__setOn('DPA 2', true)` drives it from the console.
 - **How it's drawn** (`src/glow.js`): every glowing atom is a camera-facing sprite with a Gaussian falloff,
   added up in an HDR buffer (the line-of-sight integral of a 3D Gaussian cloud). Atoms and bonds in front hide
   it, a quarter-resolution blur adds bloom to the glow only, and a `1 − exp(−I)` curve keeps faint regions
-  coloured and saturates dense ones toward white. Each chromophore's glow fades in and out (a per-site level in
-  the shader), so switching one on or off doesn't rebuild anything, and even a very short excitation shows as
-  a brief flash.
+  coloured and saturates dense ones toward white. Each chromophore's singlet and triplet glows fade in and out
+  on their own (a per-site, per-state level in the shader), so switching one on or off doesn't rebuild anything,
+  and even a very short excitation shows as a brief flash.
 
 ## Simulation mode
 
@@ -93,19 +98,25 @@ every(0.02, (dt) => {
 onExcite('Sensitizer', () => decay('Sensitizer', tau));
 ```
 
-- **States**: `on`, `off`, `toggle`, `isOn`, `transfer(from, to)`, `set(label, { color, gain, sigma })`,
-  `sites(kind?)`, `kindOf`, `neighbors`.
+- **States**: `on(label, state?)`, `off`, `toggle`, `isOn`, `transfer(from, to, state?, toState?)`,
+  `set(label, { color, gain, sigma }, state?)`, `sites(kind?)`, `kindOf`, `neighbors`. `state` is `'S'`
+  (singlet, the default, so scripts that never name a state drive the singlets) or `'T'` (triplet);
+  `'singlet'` / `'triplet'` work too. `'*'` means either/both for `isOn`, `off` and `set`.
+  `transfer(sens, sens, 'S', 'T')` is intersystem crossing, `transfer('DPA 1', 'DPA 2', 'T')` a triplet hop.
 - **Time**: `now()`, `every(interval, fn(dt))`, `after(delay, fn)`, `at(time, fn)` (each returns `.stop()`),
-  `onExcite(who, fn)` / `onDecay(who, fn)` (who = a label, a kind, an array or `'*'`; clicks trigger them too),
-  `decay(label, tau)` (off after a random exponential lifetime, unless it was already switched off).
+  `onExcite(who, fn(label, state), state?)` / `onDecay(...)` (who = a label, a kind, an array or `'*'`;
+  state defaults to `'S'`, `'*'` for either; clicks trigger them too), `decay(label, tau, state?)` (off after
+  a random exponential lifetime, unless it was already switched off).
 - **Chance**: `chance(rate, dt)` is true with probability 1 − e^(−rate·dt), so results don't depend on the step
   size. Also `random()`, `exponential(tau)`, `pick(array)`, `seed(n)` (repeatable runs).
 - **Output**: `count(name, n)`, `countOf(name)`, `show(name, value)`, `log(...)` show under the controls.
   `pause()` stops the clock.
 
 The presets are in `samples/sims/` (the first comment line is the name): **Walk along the molecule**,
-**Random sensitizer excitation**, and **TTA cascade**. TTA cascade runs on TTA Flora 4: absorption, triplet
-transfer to DPA 1, triplets hopping along the wire, two triplets meeting (TTA), and a perylene photon.
+**Random sensitizer excitation**, and **TTA cascade**. TTA cascade runs on TTA Flora 4 and uses both states:
+absorption (sensitizer S₁), intersystem crossing (sensitizer T₁), triplet transfer to DPA 1, triplets hopping
+along the wire (DPA T₁), two triplets meeting (TTA → that DPA's S₁), singlet transfer to the perylene, and a
+perylene photon (perylene S₁).
 Edits are saved in the browser per script, and **Revert** goes back to the preset. Errors stop the run and
 show the message (an unknown site, an `every(0)`, or handlers that keep switching each other). Changing the
 molecule, or n, resets the run.
@@ -176,5 +187,5 @@ The icon in `assets/` comes from `tools/make_icon.py` (`npm run icon`).
 ## Roadmap
 
 - v2: atom labels, screenshot export, background options; optional GFN2-xTB refinement of the dye geometries;
-  per-state glow colours (singlet / triplet) and animated energy transfer along the TTA chain
+  animated energy transfer along the TTA chain
 - v3: PDB / MOL / SDF formats (with explicit bond orders), double/triple bond rendering, ambient occlusion & outlines
