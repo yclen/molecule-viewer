@@ -39,6 +39,7 @@ Drop an `.xyz` file onto the page, use **Open file…**, or pick one of the buil
 | Atom info | hover an atom |
 | Excite / un-excite | the **S** / **T** dots next to a molecule under **Excited states**, or `E` (singlet) / `T` (triplet) for the selected one |
 | Run / pause simulation | **Simulate** mode: button or `Space` |
+| Collapse a section | click its heading (remembered between visits) |
 
 ## How it works
 
@@ -58,7 +59,8 @@ The **Excited states** section puts a glowing, pulsing Gaussian cloud on excited
 objects list their chromophores (Sensitizer, DPA 1…n, Perylene); any other molecule has **Whole molecule**.
 
 Each one has two excited states (`src/excited-states.js`), the **singlet S₁** and the **triplet T₁**, and each
-state has its own **on/off**, **colour**, **brightness** and **spread** (Gaussian width in Å). The two are
+state has its own **on/off**, **colour**, **brightness**, **spread** (Gaussian width in Å) and **afterglow**
+(how long its glow takes to fade, in real seconds). The two are
 independent: a molecule can have either, both or neither on, and their glows add up. Click a molecule in the
 list (or one of its atoms in the 3D view) to select it; the editor below the list shows both of its states and
 changes only that molecule, and every other molecule keeps what was set for it. The **S** and **T** dots beside
@@ -67,7 +69,8 @@ each name switch the two states on and off, `E` / `T` toggle the selected molecu
 changing n keeps DPA 1's states, and switching to another example and back restores them.
 
 Default colours: singlets are sensitizer orange, DPA blue and perylene cyan. Triplets are redder: the
-sensitizer's a slightly redder orange, DPA's and perylene's red. Both states glow over the same atoms (S₁ and T₁
+sensitizer's a slightly redder orange, DPA's and perylene's red. Singlets have a 0.25 s afterglow. Triplets have
+none: their glow appears and vanishes in the same frame, so a hopping triplet leaves no trail. Both states glow over the same atoms (S₁ and T₁
 come from the same HOMO→LUMO pair). In dev builds `__setOn('DPA 2', true, 'T')` drives it from the console.
 
 - **Where it glows**: each atom's share of the lowest π→π* excitation, (c²_HOMO + c²_LUMO) / 2, from Hückel
@@ -78,16 +81,18 @@ come from the same HOMO→LUMO pair). In dev builds `__setOn('DPA 2', true, 'T')
 - **How it's drawn** (`src/glow.js`): every glowing atom is a camera-facing sprite with a Gaussian falloff,
   added up in an HDR buffer (the line-of-sight integral of a 3D Gaussian cloud). Atoms and bonds in front hide
   it, a quarter-resolution blur adds bloom to the glow only, and a `1 − exp(−I)` curve keeps faint regions
-  coloured and saturates dense ones toward white. Each chromophore's singlet and triplet glows fade in and out
-  on their own (a per-site, per-state level in the shader), so switching one on or off doesn't rebuild anything,
-  and even a very short excitation shows as a brief flash.
+  coloured and saturates dense ones toward white. Each chromophore's singlet and triplet glows have their own
+  level in the shader. With an afterglow, a state fades in and out, and even a very short excitation shows as a
+  brief flash. With afterglow 0, the level follows the state exactly.
 
 ## Simulation mode
 
 **View / Simulate** at the top of **Excited states** switches between setting states by hand and letting a
 script set them over time (`src/simulation.js`). A script is plain JavaScript, run once at t = 0. It starts
 background loops that a clock then runs: **Run / Pause** (`Space`), **Step** (0.1 s), **Reset** (stops and
-puts every state back as it was), and **Speed** (0.1×–20×). Time is in arbitrary "sim seconds".
+puts every state back as it was), and **Speed** (0.1×–20×). Time is in "sim seconds": the clock runs at real
+seconds × Speed, so at 1× one sim second is one real second. They are arbitrary units, not real photophysical
+times. Every rate and lifetime in a script is per sim second, and the glow's afterglow is in real seconds.
 
 ```js
 const kAbs = 0.8; // absorptions per second
@@ -99,7 +104,7 @@ onExcite('Sensitizer', () => decay('Sensitizer', tau));
 ```
 
 - **States**: `on(label, state?)`, `off`, `toggle`, `isOn`, `transfer(from, to, state?, toState?)`,
-  `set(label, { color, gain, sigma }, state?)`, `sites(kind?)`, `kindOf`, `neighbors`. `state` is `'S'`
+  `set(label, { color, gain, sigma, fade }, state?)`, `sites(kind?)`, `kindOf`, `neighbors`. `state` is `'S'`
   (singlet, the default, so scripts that never name a state drive the singlets) or `'T'` (triplet);
   `'singlet'` / `'triplet'` work too. `'*'` means either/both for `isOn`, `off` and `set`.
   `transfer(sens, sens, 'S', 'T')` is intersystem crossing, `transfer('DPA 1', 'DPA 2', 'T')` a triplet hop.
@@ -109,15 +114,22 @@ onExcite('Sensitizer', () => decay('Sensitizer', tau));
   a random exponential lifetime, unless it was already switched off).
 - **Chance**: `chance(rate, dt)` is true with probability 1 − e^(−rate·dt), so results don't depend on the step
   size. Also `random()`, `exponential(tau)`, `pick(array)`, `seed(n)` (repeatable runs).
+- **Sliders**: `const kHop = slider('kHop', 30, { min: 1, max: 300, log: true, unit: '/s' })` puts a slider under
+  the controls, and `kHop()` reads it. Moving it changes a running script at once. The app reads sliders from the
+  script's text, so they show before Run, as long as the name and numbers are plain literals. Slider positions
+  are saved per script, and **Revert** resets them too.
 - **Output**: `count(name, n)`, `countOf(name)`, `show(name, value)`, `log(...)` show under the controls.
   `pause()` stops the clock.
 
 The presets are in `samples/sims/` (the first comment line is the name): **Walk along the molecule**,
 **Random sensitizer excitation**, and **TTA cascade**. TTA cascade runs on TTA Flora 4: the sensitizer gets
-excited at random (its T₁) and quickly hands the triplet to the nearest DPA. Triplets random-walk along the DPA
-chain, forward or back but never back onto the sensitizer. The perylene is a trap: a triplet that reaches it
+excited at random into its S₁ (rate `kExc`) and stays there until intersystem crossing turns it into its T₁ (rate
+`kISC`, default 1 per second, so about 1 s). That triplet hops to the nearest DPA at rate `kHop`. Triplets
+random-walk along the DPA chain, forward or back but never back onto the sensitizer. The perylene is a trap: a triplet that reaches it
 stays until a second one arrives, and then the perylene goes to S₁ (the upconverted photon). Two triplets that
-meet on a DPA annihilate there instead (homoTTA), and that DPA goes to S₁. A higher hop rate (`kHop`) gets
+meet on a DPA annihilate there instead (homoTTA), and that DPA goes to S₁. `kHop` (default 30 per second, left
+and right together) sets each triplet's random wait before its next hop. `kDecay` (default 0.01 per second, so about 100 s) is how fast a triplet decays on its own. `kExc`, `kISC`, `kHop`
+and `kDecay` are sliders. A higher `kHop` gets
 triplets to the perylene sooner and cuts homoTTA.
 Edits are saved in the browser per script, and **Revert** goes back to the preset. Errors stop the run and
 show the message (an unknown site, an `every(0)`, or handlers that keep switching each other). Changing the

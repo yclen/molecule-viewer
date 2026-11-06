@@ -1,16 +1,25 @@
 // TTA cascade
-// The sensitizer gets excited at random and hands its triplet to the nearest DPA. Triplets random-walk along
-// the DPA chain: each one hops to a neighbouring DPA (forward or back, never back onto the sensitizer). The
-// perylene annihilator is a trap: a triplet that hops onto it stays there until a second triplet arrives.
+// The sensitizer gets excited at random into its singlet S₁ and stays there until intersystem crossing (ISC) turns
+// it into its triplet T₁. That triplet hops to the nearest DPA at the same rate as any other hop. Triplets
+// random-walk along the DPA chain: each one hops to a neighbouring DPA (forward or back, never back onto the
+// sensitizer). The perylene annihilator is a trap: a triplet that hops onto it stays there until a second triplet arrives.
 //   - two triplets meet on a DPA (one hops onto the other): homoTTA. They annihilate and that DPA goes to its
 //     singlet S₁. A higher hop rate (kHop) gets triplets to the perylene sooner, so there is less homoTTA.
 //   - two triplets meet on the perylene: the perylene goes to its singlet S₁ and emits the upconverted photon
-// For TTA Flora 4: try n = 2–6 DPA mediators and see where the triplets meet, then raise kHop to cut homoTTA.
+// For TTA Flora 4: change n (the number of DPA mediators) to see where the triplets meet, and raise kHop to cut
+// homoTTA.
+// kExc, kISC, kHop and kDecay are the sliders under the controls: moving one changes a running simulation at once.
+// Times and rates are in sim seconds (real seconds × Speed).
 
-const kExc = 1.5; // sensitizer excitations per second (only while it is in the ground state)
-const tTET = 0.1; // sensitizer → nearest DPA triplet transfer time, s (mean): quick
-const kHop = 3; // hops per second for a triplet on a DPA (higher = less homoTTA)
-const tauT = 5; // triplet lifetime, s (mean); Infinity = triplets never decay on their own
+// sensitizer excitations per sim second (only while it is in the ground state)
+const kExc = slider('kExc', 1.5, { min: 0.1, max: 20, log: true, unit: '/s' });
+// sensitizer S₁ → T₁ conversions per sim second: 1 means it takes about 1 s, so you can watch the singlet
+const kISC = slider('kISC', 1, { min: 0.1, max: 20, log: true, unit: '/s' });
+// hops per sim second for a triplet, left and right together (higher = less homoTTA). Also the rate of the
+// sensitizer's hop onto the nearest DPA
+const kHop = slider('kHop', 30, { min: 1, max: 300, log: true, unit: '/s' });
+// triplet decays per sim second: 0.01 means a triplet lasts about 100 s, so few are lost before they meet
+const kDecay = slider('kDecay', 0.01, { min: 0.001, max: 1, log: true, unit: '/s' });
 const tauS = 0.3; // singlet lifetime (DPA or perylene emission), s (mean)
 
 const sens = sites('sensitizer')[0];
@@ -25,24 +34,18 @@ const chain = [...wire, emit]; // where triplets can live, from the sensitizer's
 off(sens, '*');
 for (const s of chain) off(s, '*');
 
-// 1. the sensitizer gets excited (its triplet), then passes it to the nearest DPA (the perylene if n = 0)
-every(0.02, (dt) => {
-  if (!isOn(sens, '*') && chance(kExc, dt)) on(sens, 'T');
+// 1. the sensitizer gets excited into its singlet, and at each time step that singlet may convert to the triplet
+every(0.002, (dt) => {
+  if (!isOn(sens, '*') && chance(kExc(), dt)) on(sens, 'S');
+  if (isOn(sens, 'S') && chance(kISC(), dt)) transfer(sens, sens, 'S', 'T');
 });
-onExcite(sens, () => {
-  count('sensitizer excitations');
-  after(exponential(tTET), () => {
-    if (!isOn(sens, 'T')) return;
-    off(sens, 'T');
-    arrive(chain[0]);
-  });
-}, 'T');
+onExcite(sens, () => count('sensitizer excitations'), 'S');
 
 // 2. a triplet lands on a site: empty → it stays there; already holding a triplet → TTA, that site goes to S₁
 function arrive(site) {
   if (!isOn(site, 'T')) {
     on(site, 'T');
-    decay(site, tauT, 'T');
+    decay(site, 1 / kDecay(), 'T');
     return;
   }
   off(site, 'T'); // both triplets used up ...
@@ -51,17 +54,21 @@ function arrive(site) {
   count(site === emit ? 'TTA on perylene (photon out)' : 'homoTTA (on a DPA)');
 }
 
-// 3. random walk: a triplet on a DPA hops to a random neighbour in the chain (the perylene never lets go)
-every(0.02, (dt) => {
-  const moving = wire.filter((d) => isOn(d, 'T') && chance(kHop, dt));
-  for (const d of moving) {
-    if (!isOn(d, 'T')) continue; // used up by an annihilation earlier in this step
+// 3. random walk: the moment a site gets a triplet, it gets a random time until its next hop (mean 1 / kHop). The
+// sensitizer's triplet hops to the nearest DPA (the perylene if n = 0). A DPA's hops to a random neighbour in the
+// chain. The perylene is not in this list, so it never lets go.
+const nextHop = new Map(); // site -> timer of the triplet sitting on it
+onExcite([sens, ...wire], (d) => {
+  nextHop.get(d)?.stop();
+  nextHop.set(d, after(exponential(1 / kHop()), () => {
+    if (!isOn(d, 'T')) return; // it decayed or annihilated first
     const k = chain.indexOf(d);
-    const to = pick([chain[k - 1], chain[k + 1]].filter(Boolean)); // chain[-1] is undefined: no hop to the sensitizer
+    // chain[-1] is undefined, so a triplet on DPA 1 can't hop back to the sensitizer
+    const to = d === sens ? chain[0] : pick([chain[k - 1], chain[k + 1]].filter(Boolean));
     off(d, 'T');
     arrive(to);
-  }
-});
+  }));
+}, 'T');
 
 // perylene photons per sensitizer excitation (two excitations per photon at best: 0.5)
 every(1, () => {

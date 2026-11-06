@@ -5,6 +5,8 @@
 //   color  - glow colour, '#rrggbb'
 //   gain   - brightness multiplier
 //   sigma  - spread: Gaussian width of each glowing atom, in Å
+//   fade   - afterglow: time constant of the glow going off, in real seconds. 0 = the glow appears and vanishes
+//            in the same frame, so a fast-hopping triplet leaves no trail
 // The two are independent: either, both or neither can be on, and their glows add up.
 //
 // States are kept per object (an example or a file) and per site label, so they survive rebuilding the
@@ -25,11 +27,14 @@ const KIND_COLOR = {
   molecule: { S: '#3d8bff', T: '#ff3b2f' },
 };
 
-const defaultOne = (color) => ({ on: false, color, gain: 1, sigma: 1.1 });
+/** Singlets keep a soft afterglow when they emit; triplets switch instantly so hops look fast. */
+const DEFAULT_FADE = { S: 0.25, T: 0 };
+
+const defaultOne = (color, fade) => ({ on: false, color, gain: 1, sigma: 1.1, fade });
 
 export const defaultState = (kind) => {
   const c = KIND_COLOR[kind] ?? KIND_COLOR.molecule;
-  return { S: defaultOne(c.S), T: defaultOne(c.T) };
+  return { S: defaultOne(c.S, DEFAULT_FADE.S), T: defaultOne(c.T, DEFAULT_FADE.T) };
 };
 
 /** 'S' | 'T' from 'S', 'T', 'singlet', 'triplet', 'S1', 'T1' (any case). Throws on anything else. */

@@ -6,7 +6,7 @@ import { hillFormula } from './elements.js';
 import { buildParametric, clampParam } from './parametric.js';
 import { excitationWeights } from './excitation.js';
 import { ExcitedStates, STATES, STATE_NAME, STATE_SYMBOL, copyState } from './excited-states.js';
-import { Simulation } from './simulation.js';
+import { Simulation, parseSliders } from './simulation.js';
 import { Color } from 'three';
 import TABS from '../samples/tabs.json';
 import faviconUrl from '../assets/favicon.png?inline';
@@ -558,13 +558,14 @@ window.addEventListener('keydown', (e) => {
 // ---------------------------------------------------------------------------
 
 // Each site (molecule / chromophore) has two excited states, the singlet S₁ and the triplet T₁, each with its own
-// { on, color, gain, sigma } (see excited-states.js). One site is selected at a time; the editor below the list
+// { on, color, gain, sigma, fade } (see excited-states.js). One site is selected at a time; the editor below the list
 // changes only that one (both of its states), and every other site keeps what was set for it.
 //
 // Every ground ⇄ excited change goes through setOn(), whether from a click or a simulation script, so the
 // simulation hears about clicks too. The glow of each (site, state) fades toward its state (a level 0..1 per
-// glow group, see GlowLayer.setLevels): switching one on or off is cheap, and even a very short excitation shows
-// as a flash. Group of (site i, state) = 2i for S, 2i + 1 for T.
+// glow group, see GlowLayer.setLevels). A state with an afterglow (fade > 0) fades, and even a very short
+// excitation of it shows as a flash; with fade = 0 the glow follows the state in the same frame. Group of
+// (site i, state) = 2i for S, 2i + 1 for T.
 const excite = new ExcitedStates();
 excite.key = null; // the current object's key
 excite.selected = null; // label of the site being edited
@@ -574,9 +575,8 @@ excite.litAt = new Map(); // 'label|S' -> real time (s) it last went ground → 
 excite.built = new Set(); // 'label|S' keys whose sprites are in the glow layer right now
 if (import.meta.env.DEV) window.__excite = excite; // e.g. __setOn('DPA 1', true, 'T')
 
-const FADE_IN = 0.04; // s (real time), time constant of the glow coming on
-const FADE_OUT = 0.25; // ... and going off
-const MIN_FLASH = 0.12; // s: an excitation shorter than this still shows for this long
+const FADE_IN = 0.04; // s (real time), time constant of the glow coming on (going off: each state's own fade)
+const MIN_FLASH = 0.12; // s: with a fade, an excitation shorter than this still shows for this long
 
 let realTime = 0;
 let glowDirty = true; // colours, sizes or atom positions changed: rebuild the glow sprites
@@ -650,15 +650,16 @@ function selectSite(label) {
     $(`glow-color-${k}`).value = st.color;
     $(`glow-gain-${k}`).value = st.gain;
     $(`glow-sigma-${k}`).value = st.sigma;
+    $(`glow-fade-${k}`).value = st.fade;
   }
   updateGlow();
 }
 
-/** Change colour / brightness / spread of one state of a site (not on/off: that's setOn). */
+/** Change colour / brightness / spread / afterglow of one state of a site (not on/off: that's setOn). */
 function setProps(label, patch, state = 'S') {
   const st = excite.get(label, state);
   if (!st) return;
-  for (const k of ['color', 'gain', 'sigma']) if (patch[k] !== undefined) st[k] = patch[k];
+  for (const k of ['color', 'gain', 'sigma', 'fade']) if (patch[k] !== undefined) st[k] = patch[k];
   if (label === excite.selected) selectSite(label);
   else updateGlow();
 }
@@ -692,6 +693,7 @@ function updateGlow() {
     const st = excite.get(excite.selected, k);
     $(`glow-gain-${k}-val`).textContent = `${st.gain.toFixed(2)}×`;
     $(`glow-sigma-${k}-val`).textContent = `${st.sigma.toFixed(1)} Å`;
+    $(`glow-fade-${k}-val`).textContent = st.fade > 0 ? `${st.fade.toFixed(2)} s` : 'instant';
   }
 }
 if (import.meta.env.DEV) window.__updateGlow = updateGlow;
@@ -731,11 +733,14 @@ function stepGlow(dt) {
     STATES.forEach((k, j) => {
       const key = glowKey(site.label, k);
       const st = excite.get(site.label, k);
-      const held = realTime - (excite.litAt.get(key) ?? -Infinity) < MIN_FLASH;
+      const held = st.fade > 0 && realTime - (excite.litAt.get(key) ?? -Infinity) < MIN_FLASH;
       const target = st.on || held ? 1 : 0;
       const prev = excite.levels.get(key) ?? 0;
-      let lvl = prev + (target - prev) * (1 - Math.exp(-dt / (target > prev ? FADE_IN : FADE_OUT)));
-      if (Math.abs(target - lvl) < 0.004) lvl = target;
+      let lvl = target; // no afterglow: the glow is exactly the state
+      if (st.fade > 0) {
+        lvl = prev + (target - prev) * (1 - Math.exp(-dt / (target > prev ? FADE_IN : st.fade)));
+        if (Math.abs(target - lvl) < 0.004) lvl = target;
+      }
       excite.levels.set(key, lvl);
       levels[2 * i + j] = lvl;
       if (target > 0 || lvl > 0) visible.add(key);
@@ -766,6 +771,7 @@ for (const k of STATES) {
   $(`glow-color-${k}`).addEventListener('input', (e) => editSelected(k, { color: e.target.value }));
   $(`glow-gain-${k}`).addEventListener('input', (e) => editSelected(k, { gain: Number(e.target.value) }));
   $(`glow-sigma-${k}`).addEventListener('input', (e) => editSelected(k, { sigma: Number(e.target.value) }));
+  $(`glow-fade-${k}`).addEventListener('input', (e) => editSelected(k, { fade: Number(e.target.value) }));
   $(`excite-all-${k}`).addEventListener('click', () => {
     for (const s of excite.sites) setOn(s.label, true, k);
   });
@@ -829,6 +835,7 @@ const store = {
   },
 };
 const codeKey = (id) => `molview:sim-code:${id}`;
+const sliderKey = (id) => `molview:sim-sliders:${id}`;
 const preset = (id) => SIM_PRESETS.find((p) => p.id === id) ?? SIM_PRESETS[0];
 let simScript = preset(store.get('molview:sim-script')).id;
 
@@ -846,12 +853,57 @@ function selectScript(id) {
   store.set('molview:sim-script', simScript);
   $('sim-script').value = simScript;
   $('sim-code').value = store.get(codeKey(simScript)) ?? preset(simScript).code;
+  loadSliders();
   updateRevert();
   if (sim.started) simStatus('Script changed: Reset, then Run to use it.');
 }
 
 function updateRevert() {
-  $('sim-revert').disabled = $('sim-code').value === preset(simScript).code;
+  $('sim-revert').disabled = $('sim-code').value === preset(simScript).code && !sim.sliderValues.size;
+}
+
+/** The current script's moved sliders, as saved in the browser. */
+function loadSliders() {
+  let saved = {};
+  try {
+    saved = JSON.parse(store.get(sliderKey(simScript))) ?? {};
+  } catch {
+    // unreadable: the sliders start from the script's values
+  }
+  sim.sliderValues = new Map(Object.entries(saved));
+  renderSliders();
+}
+
+function setSlider(name, value) {
+  sim.sliderValues.set(name, value);
+  store.set(sliderKey(simScript), JSON.stringify(Object.fromEntries(sim.sliderValues)));
+  updateRevert();
+}
+
+/** One row per slider() in the script's text. A running script reads the values live (see simulation.js). */
+function renderSliders() {
+  const sliders = parseSliders($('sim-code').value);
+  $('sim-sliders').hidden = !sliders.length;
+  $('sim-sliders').replaceChildren(
+    ...sliders.flatMap((s) => {
+      const toPos = (v) => (s.log ? Math.log10(v) : v);
+      const lo = toPos(s.min);
+      const hi = toPos(s.max);
+      const input = Object.assign(document.createElement('input'), { type: 'range', min: lo, max: hi, step: (hi - lo) / 200 });
+      const val = Object.assign(document.createElement('span'), { className: 'val' });
+      const show = (v) => (val.textContent = `${v} ${s.unit}`.trim());
+      const value = Math.min(s.max, Math.max(s.min, sim.sliderValues.get(s.name) ?? s.value));
+      input.value = toPos(value);
+      show(value);
+      input.addEventListener('input', () => {
+        const p = Number(input.value);
+        const v = Number((s.log ? 10 ** p : p).toPrecision(3));
+        setSlider(s.name, v);
+        show(v);
+      });
+      return [Object.assign(document.createElement('span'), { textContent: s.name }), input, val];
+    }),
+  );
 }
 
 function setMode(mode) {
@@ -951,6 +1003,7 @@ $('sim-script').addEventListener('change', (e) => selectScript(e.target.value));
 $('sim-code').addEventListener('input', (e) => {
   const code = e.target.value;
   store.set(codeKey(simScript), code === preset(simScript).code ? null : code);
+  renderSliders();
   updateRevert();
   if (sim.started) simStatus('Edited: Reset, then Run to use the new code.');
 });
@@ -962,6 +1015,7 @@ $('sim-code').addEventListener('keydown', (e) => {
 });
 $('sim-revert').addEventListener('click', () => {
   store.set(codeKey(simScript), null);
+  store.set(sliderKey(simScript), null);
   selectScript(simScript);
 });
 $('sim-play').addEventListener('click', simPlayPause);
@@ -981,6 +1035,50 @@ viewer.onFrame = (dt) => {
 };
 
 initSim();
+
+// ---------------------------------------------------------------------------
+// Collapsible panel sections: click a heading. Which ones are closed is remembered.
+// ---------------------------------------------------------------------------
+
+function initFolds() {
+  let closed = [];
+  try {
+    closed = JSON.parse(store.get('molview:collapsed')) ?? [];
+  } catch {
+    // unreadable: everything starts open
+  }
+  const folds = new Set(closed);
+  for (const section of document.querySelectorAll('#panel > section[id]')) {
+    const head = section.querySelector(':scope > .label');
+    if (!head) continue;
+    const apply = () => {
+      const shut = folds.has(section.id);
+      section.classList.toggle('collapsed', shut);
+      head.setAttribute('aria-expanded', String(!shut));
+    };
+    const toggle = () => {
+      if (!folds.delete(section.id)) folds.add(section.id);
+      store.set('molview:collapsed', JSON.stringify([...folds]));
+      apply();
+    };
+    head.classList.add('fold');
+    head.tabIndex = 0;
+    head.setAttribute('role', 'button');
+    head.title = 'Show / hide this section';
+    head.addEventListener('click', (e) => {
+      toggle();
+      if (e.detail) head.blur(); // a mouse click must not keep the focus: Space still runs the simulation
+    });
+    head.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      e.stopPropagation();
+      toggle();
+    });
+    apply();
+  }
+}
+initFolds();
 
 // ---------------------------------------------------------------------------
 // Toast

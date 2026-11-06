@@ -42,7 +42,7 @@ MOLECULES = {
              desc="Sensitizer (bis-triarylamine thienoquinoxaline dioxide) – phenylene – n DPA mediators – "
                   "perylene. n = 0 is the direct sensitizer–linker–perylene dyad.",
              param=dict(data="tta-flora-4.param.json", label="DPA mediators", symbol="n", min=0, max=20,
-                        default=2)),
+                        default=8)),
     ],
     # ------------------------------------------------------------------ xanthene dyes
     "xanthenes": [

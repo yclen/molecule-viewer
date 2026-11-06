@@ -20,7 +20,8 @@
 //   off(label, state?)         switch a state off ('*': both); returns true if that changed anything
 //   toggle(label, state?)
 //   transfer(from, to, state?, toState?)   off(from, state), then on(to, toState); toState defaults to state
-//   set(label, { color, gain, sigma }, state?)   change how a state's glow looks ('*': both)
+//   set(label, { color, gain, sigma, fade }, state?)   change how a state's glow looks ('*': both); fade is the
+//                              afterglow in real seconds, 0 = instant
 //   every(interval, fn(dt))    run fn every interval s; returns a handle with .stop()
 //   after(delay, fn)           run fn once, delay s from now; returns a handle with .stop()
 //   at(time, fn)               run fn once at sim time `time`
@@ -38,12 +39,34 @@
 //   countOf(name)              a counter's value (0 if never counted)
 //   show(name, value)          show a value under the controls (like a counter, but set rather than added to)
 //   log(...values)             show a line under the controls
+//   slider(name, value, { min, max, log, unit })   a slider under the controls. Returns a function that reads the
+//                              current value, so moving the slider changes a running script at once:
+//                                const kHop = slider('kHop', 30, { min: 1, max: 300, log: true, unit: '/s' });
+//                                ... exponential(1 / kHop()) ...
+//                              The app finds sliders in the script's text, so they show before it runs: write the
+//                              name and numbers as plain literals. log: true spaces the slider by ratio
 //   pause()                    pause the simulation
 
 import { STATES, stateKey } from './excited-states.js';
 
 export const MAX_EVENTS_PER_FRAME = 200000;
 const MAX_DEPTH = 64; // on/off handlers calling on/off calling handlers...
+
+/** The sliders a script declares, read from its text (nothing is run): [{ name, value, min, max, log, unit }]. */
+export function parseSliders(code) {
+  const text = code.replace(/^\s*\/\/.*$/gm, ''); // not the ones in comments
+  const call = /\bslider\(\s*['"]([^'"]+)['"]\s*,\s*(-?[\d.]+(?:e-?\d+)?)\s*(?:,\s*\{([^}]*)\}\s*)?\)/g;
+  const option = /(\w+)\s*:\s*(?:'([^']*)'|"([^"]*)"|([^,\s]+))/g;
+  const found = new Map();
+  for (const [, name, literal, opts = ''] of text.matchAll(call)) {
+    const value = Number(literal);
+    const o = Object.fromEntries([...opts.matchAll(option)].map(([, k, a, b, c]) => [k, a ?? b ?? c]));
+    const min = Number(o.min ?? 0);
+    const max = Number(o.max ?? (value > 0 ? value * 10 : 1));
+    found.set(name, { name, value, min, max, log: o.log === 'true' && min > 0, unit: o.unit ?? '' });
+  }
+  return [...found.values()];
+}
 
 /** Small, fast, seedable generator (mulberry32). */
 function rng(seed) {
@@ -63,13 +86,14 @@ export class Simulation {
    *   sites(): [{ label, kind }]          current sites, in molecule order
    *   isOn(label, state), setOn(label, on, state)   read / write a state, 'S' or 'T' (setOn must call back
    *                                        sim.notify)
-   *   setProps(label, patch, state)        color / gain / sigma
+   *   setProps(label, patch, state)        color / gain / sigma / fade
    * }
    */
   constructor(host) {
     this.host = host;
     this.status = 'reset'; // reset | running | paused | error
     this.speed = 1;
+    this.sliderValues = new Map(); // name -> value, for the sliders the user has moved
     this.onChange = null; // called after status, counters or log change
     this._clear();
   }
@@ -325,6 +349,7 @@ export class Simulation {
         sim._changed();
       },
       pause: () => sim.pause(),
+      slider: (name, value) => () => sim.sliderValues.get(name) ?? value,
     };
   }
 }
