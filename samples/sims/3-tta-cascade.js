@@ -12,14 +12,14 @@
 // Times and rates are in sim seconds (real seconds × Speed).
 
 // sensitizer excitations per sim second (only while it is in the ground state)
-const kExc = slider('kExc', 1.5, { min: 0.1, max: 20, log: true, unit: '/s' });
-// sensitizer S₁ → T₁ conversions per sim second: 1 means it takes about 1 s, so you can watch the singlet
-const kISC = slider('kISC', 1, { min: 0.1, max: 20, log: true, unit: '/s' });
+const kExc = slider('kExc', 0.1, { min: 0.1, max: 20, log: true, unit: '/s' });
+// sensitizer S₁ → T₁ conversions per sim second: 2.82 means it takes about 0.35 s, so you can watch the singlet
+const kISC = slider('kISC', 2.82, { min: 0.1, max: 20, log: true, unit: '/s' });
 // hops per sim second for a triplet, left and right together (higher = less homoTTA). Also the rate of the
 // sensitizer's hop onto the nearest DPA
-const kHop = slider('kHop', 30, { min: 1, max: 300, log: true, unit: '/s' });
-// triplet decays per sim second: 0.01 means a triplet lasts about 100 s, so few are lost before they meet
-const kDecay = slider('kDecay', 0.01, { min: 0.001, max: 1, log: true, unit: '/s' });
+const kHop = slider('kHop', 54.2, { min: 1, max: 300, log: true, unit: '/s' });
+// triplet decays per sim second: 0.001 means a triplet lasts about 1000 s, so few are lost before they meet
+const kDecay = slider('kDecay', 0.001, { min: 0.001, max: 1, log: true, unit: '/s' });
 const tauS = 0.3; // singlet lifetime (DPA or perylene emission), s (mean)
 
 const sens = sites('sensitizer')[0];

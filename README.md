@@ -124,11 +124,11 @@ onExcite('Sensitizer', () => decay('Sensitizer', tau));
 The presets are in `samples/sims/` (the first comment line is the name): **Walk along the molecule**,
 **Random sensitizer excitation**, and **TTA cascade**. TTA cascade runs on TTA Flora 4: the sensitizer gets
 excited at random into its S₁ (rate `kExc`) and stays there until intersystem crossing turns it into its T₁ (rate
-`kISC`, default 1 per second, so about 1 s). That triplet hops to the nearest DPA at rate `kHop`. Triplets
+`kISC`, default 2.82 per second, so about 0.35 s). That triplet hops to the nearest DPA at rate `kHop`. Triplets
 random-walk along the DPA chain, forward or back but never back onto the sensitizer. The perylene is a trap: a triplet that reaches it
 stays until a second one arrives, and then the perylene goes to S₁ (the upconverted photon). Two triplets that
-meet on a DPA annihilate there instead (homoTTA), and that DPA goes to S₁. `kHop` (default 30 per second, left
-and right together) sets each triplet's random wait before its next hop. `kDecay` (default 0.01 per second, so about 100 s) is how fast a triplet decays on its own. `kExc`, `kISC`, `kHop`
+meet on a DPA annihilate there instead (homoTTA), and that DPA goes to S₁. `kHop` (default 54.2 per second, left
+and right together) sets each triplet's random wait before its next hop. `kDecay` (default 0.001 per second, so about 1000 s) is how fast a triplet decays on its own. `kExc`, `kISC`, `kHop`
 and `kDecay` are sliders. A higher `kHop` gets
 triplets to the perylene sooner and cuts homoTTA.
 Edits are saved in the browser per script, and **Revert** goes back to the preset. Errors stop the run and
