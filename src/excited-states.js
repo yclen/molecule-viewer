@@ -18,13 +18,17 @@ export const STATE_SYMBOL = { S: 'S₁', T: 'T₁' };
 
 /**
  * Starting colours by site kind. Singlets: warm for the sensitizer, blue for DPA mediators, cyan for the emitter.
- * Triplets are redder: the sensitizer's a slightly redder orange, DPA's and perylene's a full red.
+ * Triplets are redder: the sensitizer's a slightly redder orange, DPA's and perylene's a full red. A dye is JF525's
+ * yellow-green (it emits at 549 nm), a fluorescent protein mNeonGreen's green, and retinal a purple to set it apart.
  */
 const KIND_COLOR = {
   sensitizer: { S: '#ff8a3d', T: '#ff5f2a' },
   mediator: { S: '#3d8bff', T: '#ff3b2f' },
   emitter: { S: '#4de3ff', T: '#e8243c' },
   molecule: { S: '#3d8bff', T: '#ff3b2f' },
+  dye: { S: '#b4ff3a', T: '#ff3b2f' },
+  fp: { S: '#3dff8a', T: '#ff3b2f' },
+  retinal: { S: '#c65dff', T: '#ff3b2f' },
 };
 
 /** Singlets keep a soft afterglow when they emit; triplets switch instantly so hops look fast. */
@@ -59,7 +63,12 @@ export class ExcitedStates {
     if (!this.objects.has(objectKey)) this.objects.set(objectKey, new Map());
     this.states = this.objects.get(objectKey);
     this.sites = sites;
-    for (const s of sites) if (!this.states.has(s.label)) this.states.set(s.label, defaultState(s.kind));
+    for (const s of sites) {
+      if (this.states.has(s.label)) continue;
+      const st = defaultState(s.kind);
+      st.S.on = Boolean(s.on); // an example can start lit, to show where its chromophore is
+      this.states.set(s.label, st);
+    }
   }
 
   /** get('DPA 1') → { S, T }; get('DPA 1', 'T') → the triplet alone. */

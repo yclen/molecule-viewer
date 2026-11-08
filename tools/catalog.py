@@ -9,6 +9,12 @@ Each entry:
     note     - (optional) why the SMILES differs from the PubChem record
     restraints - (optional) [(el1, el2, Å)] bonds pulled to crystallographic means after minimisation
     post     - (optional) post-processing step, e.g. "porphyrin:Pt"
+    conjugate - (optional) dye modelled onto a PDB ligand, see tools/build_halotag.py
+    site     - (optional) named chromophore: {label, kind, last, skip, on}. It is the file's last `last` atoms, leaving
+               out the final `skip`, and starts in its singlet if `on`
+    sites    - (optional) several of those
+    fusion   - (optional) rhodopsin indicator: {tag, junction}, see tools/build_voltron.py
+    membrane - (optional) an earlier file in the tab set into a lipid bilayer: {of, radius}, see tools/build_membrane.py
 
 Counter-ions (Na+, K+, Cl-, Br-) are dropped: the coloured/fluorescent species is drawn.
 """
@@ -42,7 +48,9 @@ MOLECULES = {
              desc="Sensitizer (bis-triarylamine thienoquinoxaline dioxide) – phenylene – n DPA mediators – "
                   "perylene. n = 0 is the direct sensitizer–linker–perylene dyad.",
              param=dict(data="tta-flora-4.param.json", label="DPA mediators", symbol="n", min=0, max=20,
-                        default=8)),
+                        default=8),
+             sensitizers=dict(original="Bis-triarylamine thienoquinoxaline dioxide (original)",
+                              **{"from": ["uc-sens", "tta/ptoep.xyz", "tadf/dmac-trz.xyz"]})),
     ],
     # ------------------------------------------------------------------ xanthene dyes
     "xanthenes": [
@@ -141,6 +149,56 @@ MOLECULES = {
              desc="Enhanced GFP (F64L/S65T). Abs 488 / Em 507 nm. The standard green FP."),
         dict(file="mcherry.xyz", name="mCherry (2H5Q)", pdb="2H5Q", chain="A", keep_het=["CH6"],
              desc="Monomeric red FP derived from DsRed. Abs 587 / Em 610 nm."),
+        # HaloTag: a self-labelling protein tag, and a synthetic dye that bonds to it
+        dict(file="jf525.xyz", name="JF525",
+             desc="Janelia Fluor 525 on its own: a rhodamine with two 3,3-difluoroazetidines. The free acid; linkers "
+                  "attach at the spare carboxyl. Abs 525 / Em 549 nm.",
+             smiles="[O-]C(=O)c1ccc(cc1C2=C3C=CC(=[N+]4CC(F)(F)C4)C=C3Oc5cc(N6CC(F)(F)C6)ccc25)C(=O)O",
+             source="vendor", formula="C27H18F4N2O5",
+             site=dict(label="JF525", kind="dye", last=56),
+             note="Open zwitterion, the fluorescent form. From the Hello Bio name: 3,6-di-1-(3,3-difluoroazetidinyl)-9-"
+                  "[2,5-dicarboxyphenyl]xanthylium, inner salt. Formula is the DC Chemicals NHS ester, C31H21F4N3O7, "
+                  "less the succinimide."),
+        dict(file="jf525-halotag-ligand.xyz", name="JF525 HaloTag ligand",
+             desc="Janelia Fluor 525: a rhodamine with two 3,3-difluoroazetidines, plus the chloroalkane linker that "
+                  "HaloTag grabs. Abs 525 / Em 549 nm.",
+             smiles="[O-]C(=O)c1ccc(cc1C2=C3C=CC(=[N+]4CC(F)(F)C4)C=C3Oc5cc(N6CC(F)(F)C6)ccc25)"
+                    "C(=O)NCCOCCOCCCCCCCl",
+             source="vendor", formula="C37H38ClF4N3O6",
+             site=dict(label="JF525", kind="dye", last=89),
+             note="Open zwitterion, the fluorescent form. From the Tocris name: 4-((2-(2-((6-chlorohexyl)oxy)ethoxy)"
+                  "ethyl)carbamoyl)-2-(3-(3,3-difluoroazetidin-1-ium-1-ylidene)-6-(3,3-difluoroazetidin-1-yl)-3H-"
+                  "xanthen-9-yl)benzoate."),
+        dict(file="halotag7.xyz", name="HaloTag7 (6Y7A)", pdb="6Y7A", chain="A", keep_het=[],
+             desc="Engineered bacterial dehalogenase, 293 residues, 1.40 Å X-ray structure. Asp106 at the bottom of its "
+                  "tunnel attacks the ligand's chloroalkane. Protein only."),
+        dict(file="halotag7-jf525.xyz", name="HaloTag7–JF525", pdb="6Y7A", chain="A",
+             conjugate=dict(ligand="OEH"), site=dict(label="JF525", kind="dye", last=88, on=True),
+             desc="JF525 bonded to Asp106; the chloride has left. Model: the TMR dye in 6Y7A with its amino groups "
+                  "changed to difluoroazetidines. The dye starts lit so you can find it."),
+        # Rhodopsin voltage indicators: voltage shifts the retinal's absorption, which quenches a neighbouring
+        # fluorophore by FRET
+        dict(file="ace-rhodopsin.xyz", name="Acetabularia rhodopsin (3AM6)", pdb="3AM6", chain="A", keep_het=["RET"],
+             site=dict(label="Retinal", kind="retinal", last=20, on=True),
+             desc="Seven-helix proton pump from a green alga, 3.20 Å X-ray structure. Retinal sits in the middle, bonded "
+                  "to Lys211. Parent of the voltage sensor in Voltron. The retinal starts lit."),
+        dict(file="voltron525.xyz", name="Voltron525 (model)", fusion=dict(tag="halo", junction="FKIGT"),
+             sites=[dict(label="Retinal", kind="retinal", last=20, skip=88),
+                    dict(label="JF525", kind="dye", last=88, on=True)],
+             desc="Ace2N rhodopsin fused straight to HaloTag7 carrying JF525: five residues removed, no linker. Membrane "
+                  "voltage shifts the retinal's absorption, which quenches the dye by FRET. Composite: the pose of the "
+                  "two domains is modelled."),
+        dict(file="ace2n-mneon.xyz", name="Ace2N-mNeon (model)", fusion=dict(tag="mneon", junction="FKKMLRSLP"),
+             sites=[dict(label="Retinal", kind="retinal", last=20, skip=19),
+                    dict(label="mNeonGreen", kind="fp", last=19, on=True)],
+             desc="The same rhodopsin fused to the fluorescent protein mNeonGreen, a GFP-like barrel, and Voltron's "
+                  "predecessor. Composite: the pose of the two domains is modelled."),
+        dict(file="voltron525-membrane.xyz", name="Voltron525 in a membrane (model)",
+             membrane=dict(of="voltron525.xyz", radius=55),
+             sites=[dict(label="Retinal", kind="retinal", last=20, skip=88),
+                    dict(label="JF525", kind="dye", last=88, on=True)],
+             desc="Voltron525 set into a POPC bilayer, seen side on: cytoplasm below, outside above. The lipids are a "
+                  "frame from a published simulation, drawn faint; nothing was relaxed around the protein."),
     ],
     # ------------------------------------------------------------------ triplet-triplet annihilation upconversion
     "tta": [

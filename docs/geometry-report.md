@@ -32,6 +32,14 @@ crystallographic windows (Allen et al. 1987) and, where available, against PubCh
 | GFP (wild-type, 2WUR) | 3590 | X-ray | 0 | - |
 | EGFP (2Y0G) | 1803 | X-ray | 0 | - |
 | mCherry (2H5Q) | 1733 | X-ray | 0 | - |
+| JF525 | 56 | MMFF94s | 0 | - |
+| JF525 HaloTag ligand | 89 | MMFF94s | 1 | - |
+| HaloTag7 (6Y7A) | 2350 | X-ray | 0 | - |
+| HaloTag7–JF525 | 2438 | X-ray + model | 0 | - |
+| Acetabularia rhodopsin (3AM6) | 1776 | X-ray | 0 | - |
+| Voltron525 (model) | 4201 | X-ray + model | 0 | - |
+| Ace2N-mNeon (model) | 3527 | X-ray + model | 0 | - |
+| Voltron525 in a membrane (model) | 16421 | model + MD lipids | 0 | - |
 | 9,10-Diphenylanthracene (DPA) | 44 | MMFF94s | 0 | 0.010 / 0.024 |
 | Perylene | 32 | MMFF94s | 0 | 0.000 / 0.001 |
 | Pyrene | 26 | MMFF94s | 0 | 0.000 / 0.001 |
@@ -534,6 +542,84 @@ crystallographic windows (Allen et al. 1987) and, where available, against PubCh
 - Source: RCSB PDB 2H5Q, chain A, X-ray (no H; solvent/additives removed)
 - 1733 atoms, 218 residues; hetero groups: CH6
 - Experimental coordinates, so no geometry check is applied.
+
+### JF525
+
+- Structure: written from the supplier's chemical name (Open zwitterion, the fluorescent form. From the Hello Bio name: 3,6-di-1-(3,3-difluoroazetidinyl)-9-[2,5-dicarboxyphenyl]xanthylium, inner salt. Formula is the DC Chemicals NHS ester, C31H21F4N3O7, less the succinimide.)
+- Formula: C27H18F4N2O5 — matches C27H18F4N2O5 (supplier data)
+- Geometry: RDKit ETKDGv3 + MMFF94s, lowest of 14 conformers
+- 56 atoms, 61 bonds; **0 outside typical range**, 0 without a reference window
+- PubChem 3D comparison: n/a
+
+| Bond | n | mean (Å) | min | max | typical |
+|---|---|---|---|---|---|
+| C–C aromatic | 12 | 1.402 | 1.396 | 1.420 | 1.35–1.46 |
+| C–C double | 3 | 1.347 | 1.343 | 1.355 | 1.31–1.44 |
+| C–C single | 12 | 1.503 | 1.460 | 1.538 | 1.41–1.58 |
+| C–F single | 4 | 1.355 | 1.352 | 1.358 | 1.32–1.40 |
+| C–H single | 17 | 1.089 | 1.080 | 1.094 | 1.07–1.11 |
+| C–N double | 1 | 1.278 | 1.278 | 1.278 | 1.27–1.40 |
+| C–N single | 5 | 1.433 | 1.398 | 1.464 | 1.32–1.52 |
+| C–O double | 2 | 1.246 | 1.217 | 1.275 | 1.19–1.28 |
+| C–O single | 4 | 1.345 | 1.274 | 1.380 | 1.24–1.46 |
+| H–O single | 1 | 0.980 | 0.980 | 0.980 | 0.95–1.01 |
+
+### JF525 HaloTag ligand
+
+- Structure: written from the supplier's chemical name (Open zwitterion, the fluorescent form. From the Tocris name: 4-((2-(2-((6-chlorohexyl)oxy)ethoxy)ethyl)carbamoyl)-2-(3-(3,3-difluoroazetidin-1-ium-1-ylidene)-6-(3,3-difluoroazetidin-1-yl)-3H-xanthen-9-yl)benzoate.)
+- Formula: C37H38ClF4N3O6 — matches C37H38ClF4N3O6 (supplier data)
+- Geometry: RDKit ETKDGv3 + MMFF94s, lowest of 20 conformers
+- 89 atoms, 94 bonds; **1 outside typical range**, 0 without a reference window
+- PubChem 3D comparison: n/a
+
+| Bond | n | mean (Å) | min | max | typical |
+|---|---|---|---|---|---|
+| C–C aromatic | 12 | 1.402 | 1.398 | 1.416 | 1.35–1.46 |
+| C–C double | 3 | 1.347 | 1.343 | 1.355 | 1.31–1.44 |
+| C–C single | 19 | 1.513 | 1.459 | 1.539 | 1.41–1.58 |
+| C–Cl single | 1 | 1.779 | 1.779 | 1.779 | 1.70–1.77 |
+| C–F single | 4 | 1.355 | 1.352 | 1.358 | 1.32–1.40 |
+| C–H single | 37 | 1.092 | 1.080 | 1.097 | 1.07–1.11 |
+| C–N double | 1 | 1.278 | 1.278 | 1.278 | 1.27–1.40 |
+| C–N single | 7 | 1.429 | 1.379 | 1.464 | 1.32–1.52 |
+| C–O double | 2 | 1.251 | 1.228 | 1.275 | 1.19–1.28 |
+| C–O single | 7 | 1.395 | 1.275 | 1.437 | 1.24–1.46 |
+| H–N single | 1 | 1.016 | 1.016 | 1.016 | 0.99–1.04 |
+
+> ⚠ atoms 50–51 (C–Cl single): 1.779 Å, expected 1.70–1.77
+
+### HaloTag7 (6Y7A)
+
+- Source: RCSB PDB 6Y7A, chain A, X-ray (no H; solvent/additives removed)
+- 2350 atoms, 293 residues; hetero groups: none
+- Experimental coordinates, so no geometry check is applied.
+
+### HaloTag7–JF525
+
+- Source: RCSB PDB 6Y7A (HaloTag7 with TMR, X-ray 1.40 Å), chain A. Crystal positions kept for all protein atoms and the dye atoms shared with TMR; difluoroazetidines and dye H added by RDKit MMFF94s with those atoms fixed
+- 2438 atoms, 293 residues, 88 dye atoms
+- Modelled, not a crystal structure of this dye. New dye atoms closer than 2.8 Å to the protein: F to GLN165 O 2.80 Å; F to GLN165 CB 2.74 Å
+
+### Acetabularia rhodopsin (3AM6)
+
+- Source: RCSB PDB 3AM6, chain A, X-ray (no H; solvent/additives removed)
+- 1776 atoms, 225 residues; hetero groups: RET
+- Experimental coordinates, so no geometry check is applied.
+
+### Voltron525 (model)
+
+- Source: Composite model, not a structure of this protein. Rhodopsin: RCSB PDB 3AM6 chain A with retinal, X-ray 3.20 Å, D92N, placed as OPM places it (membrane normal y, midplane y = 0, hydrophobic half-thickness 15.6 Å). HaloTag7 with JF525: the HaloTag7–JF525 model in this tab. Domains rigid; their pose is one of 122 that fit, chromophore to retinal 43.5 Å. Junction FKIGT (US 11,598,792) rebuilt by RDKit MMFF94s between crystal anchors
+- 4201 atoms. Junction atoms closer than 2.8 Å to a domain: 0
+
+### Ace2N-mNeon (model)
+
+- Source: Composite model, not a structure of this protein. Rhodopsin: RCSB PDB 3AM6 chain A with retinal, X-ray 3.20 Å, D92N, placed as OPM places it (membrane normal y, midplane y = 0, hydrophobic half-thickness 15.6 Å). mNeonGreen: RCSB PDB 5LTR chain A, X-ray 1.21 Å. Domains rigid; their pose is one of 420 that fit, chromophore to retinal 49.6 Å. Junction FKKMLRSLP (US 11,598,792) rebuilt by RDKit MMFF94s between crystal anchors
+- 3527 atoms. Junction atoms closer than 2.8 Å to a domain: 2
+
+### Voltron525 in a membrane (model)
+
+- Source: voltron525.xyz set into a POPC bilayer: last frame of a 270 ns MD run (Berger lipids; Ollila, Ferreira and Topgaard, Zenodo 13279), tiled, a 55 Å disc, 235 lipids kept and 57 removed for touching the protein. Not relaxed; no water
+- 16421 atoms, of which 12220 lipid
 
 ## TTA upconversion
 

@@ -26,6 +26,9 @@ from rdkit.Chem import AllChem, rdMolDescriptors
 from rdkit.Chem.MolStandardize import rdMolStandardize
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_halotag import build_conjugate  # noqa: E402
+from build_membrane import build_membrane  # noqa: E402
+from build_voltron import build_fusion, halo_domain, mneon_domain  # noqa: E402
 from catalog import MOLECULES, TABS  # noqa: E402
 
 RDLogger.DisableLog("rdApp.*")
@@ -70,6 +73,28 @@ def fetch(url, path):
         with urllib.request.urlopen(req, timeout=60) as r:
             path.write_bytes(r.read())
     return path.read_text(encoding="utf-8", errors="replace")
+
+
+def pdb_text(pdb_id):
+    return fetch(f"https://files.rcsb.org/download/{pdb_id}.pdb", CACHE / "pdb" / f"{pdb_id}.pdb")
+
+
+def opm_text(pdb_id):
+    """OPM's copy of a PDB entry, placed in a membrane (normal z, midplane z = 0)."""
+    pdb_id = pdb_id.lower()
+    return fetch(f"https://opm-assets.storage.googleapis.com/pdb/{pdb_id}.pdb", CACHE / "opm" / f"{pdb_id}.pdb")
+
+
+def bilayer_text():
+    """Last frame of a 270 ns POPC bilayer run (Berger lipids, 128 POPC), Zenodo record 13279."""
+    return fetch("https://zenodo.org/api/records/13279/files/endCONF.gro/content",
+                 CACHE / "lipids" / "popc128-endCONF.gro")
+
+
+def read_xyz(path):
+    lines = path.read_text("utf-8").splitlines()
+    rows = [line.split() for line in lines[2:2 + int(lines[0])]]
+    return [r[0] for r in rows], [tuple(float(v) for v in r[1:4]) for r in rows]
 
 
 def xyz_text(symbols, coords, comment):
@@ -367,6 +392,8 @@ def describe_source(entry):
         return f"original paper SI{ref}"
     if src == "drawing":
         return f"transcribed from the review's Fig. {entry.get('fig', '?')}{ref}"
+    if src == "vendor":
+        return "written from the supplier's chemical name"
     return f"PubChem CID {entry.get('cid', '-')}{ref}"
 
 
@@ -376,7 +403,8 @@ def formula_check(mol, entry):
     exp = entry.get("formula")
     if not exp:
         return f"{got} (no reference formula)"
-    basis = {"si": "SI HRMS", "drawing": "hand count of the drawing"}.get(entry.get("source"), "PubChem")
+    basis = {"si": "SI HRMS", "drawing": "hand count of the drawing",
+             "vendor": "supplier data"}.get(entry.get("source"), "PubChem")
     return f"{got} — {'matches' if got == exp else '**MISMATCH** vs'} {exp} ({basis})"
 
 
@@ -435,12 +463,73 @@ def main():
 
         for entry in MOLECULES[tab]:
             index.append({"file": entry["file"], "name": entry["name"], "description": entry["desc"]})
+            if "site" in entry:  # a named chromophore: the last `last` atoms of the file
+                index[-1]["sites"] = [entry["site"]]
+            if "sites" in entry:
+                index[-1]["sites"] = entry["sites"]
             if "param" in entry:  # built in the app from a repeat unit (tools/build_wire.py)
                 index[-1]["param"] = entry["param"]
+                if "sensitizers" in entry:
+                    index[-1]["sensitizers"] = entry["sensitizers"]
                 continue
             if args.only and args.only not in entry["file"]:
                 continue
             print(f"[{tab}] {entry['name']} ...", end=" ", flush=True)
+
+            if "membrane" in entry:
+                protein_symbols, protein_coords = read_xyz(out_dir / entry["membrane"]["of"])
+                built = build_membrane(bilayer_text(), protein_symbols, protein_coords, entry["membrane"]["radius"])
+                symbols, coords = built["symbols"] + protein_symbols, built["coords"] + protein_coords
+                comment = (f"{entry['name']} | {entry['membrane']['of']} set into a POPC bilayer: last frame of a 270 ns "
+                           f"MD run (Berger lipids; Ollila, Ferreira and Topgaard, Zenodo 13279), tiled, a "
+                           f"{entry['membrane']['radius']} Å disc, {built['lipids']} lipids kept and {built['removed']} "
+                           f"removed for touching the protein. Not relaxed; no water")
+                (out_dir / entry["file"]).write_text(xyz_text(symbols, coords, comment), "utf-8")
+                index[-1]["surroundings"] = len(built["symbols"])
+                index[-1]["keepAxes"] = True
+                print(f"{len(symbols)} atoms, {built['lipids']} lipids, {built['removed']} removed")
+                report += [f"### {entry['name']}", "", f"- Source: {comment.split(' | ', 1)[1]}",
+                           f"- {len(symbols)} atoms, of which {len(built['symbols'])} lipid", ""]
+                summary.append((entry["name"], len(symbols), "model + MD lipids", 0, "-"))
+                continue
+
+            if "fusion" in entry:
+                if entry["fusion"]["tag"] == "halo":
+                    text = pdb_text("6Y7A")
+                    conjugate = build_conjugate(text, dict(pdb="6Y7A", chain="A", conjugate=dict(ligand="OEH")))
+                    domain = halo_domain(conjugate, text)
+                else:
+                    domain = mneon_domain(pdb_text("5LTR"))
+                built = build_fusion(pdb_text("3AM6"), opm_text("3AM6"), entry, domain)
+                if built["n_chromophore"] != entry["sites"][-1]["last"]:
+                    raise RuntimeError(f"{entry['name']}: chromophore size differs from the catalog")
+                comment = f"{entry['name']} | {built['method']}"
+                (out_dir / entry["file"]).write_text(xyz_text(built["symbols"], built["coords"], comment), "utf-8")
+                print(f"{len(built['symbols'])} atoms, chromophore to retinal {built['distance']:.1f} Å, "
+                      f"{built['fits']} poses fit, {built['contacts']} junction contacts")
+                report += [f"### {entry['name']}", "", f"- Source: {built['method']}",
+                           f"- {len(built['symbols'])} atoms. Junction atoms closer than 2.8 Å to a domain: "
+                           f"{built['contacts']}", ""]
+                summary.append((entry["name"], len(built["symbols"]), "X-ray + model", 0, "-"))
+                continue
+
+            if "conjugate" in entry:
+                pdb_id = entry["pdb"].upper()
+                built = build_conjugate(fetch(f"https://files.rcsb.org/download/{pdb_id}.pdb",
+                                              CACHE / "pdb" / f"{pdb_id}.pdb"), entry)
+                if len(built["dye"]) != entry["site"]["last"]:
+                    raise RuntimeError(f"{entry['name']}: dye has {len(built['dye'])} atoms, catalog says otherwise")
+                comment = f"{entry['name']} | {built['method']}"
+                (out_dir / entry["file"]).write_text(xyz_text(built["symbols"], built["coords"], comment), "utf-8")
+                print(f"{len(built['symbols'])} atoms, {built['n_res']} residues, "
+                      f"closest new dye atom to the protein {built['closest']:.2f} Å")
+                report += [f"### {entry['name']}", "",
+                           f"- Source: {built['method']}",
+                           f"- {len(built['symbols'])} atoms, {built['n_res']} residues, {len(built['dye'])} dye atoms",
+                           f"- Modelled, not a crystal structure of this dye. New dye atoms closer than 2.8 Å to the "
+                           f"protein: {'; '.join(built['contacts']) or 'none'}", ""]
+                summary.append((entry["name"], len(built["symbols"]), "X-ray + model", 0, "-"))
+                continue
 
             if "pdb" in entry:
                 built = build_protein(entry)

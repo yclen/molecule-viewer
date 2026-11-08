@@ -17,6 +17,9 @@ export const STYLES = {
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
+/** Surroundings (e.g. the lipids round a membrane protein): smaller atoms, thinner bonds, colours pulled to slate. */
+const FAINT = { size: 0.4, bond: 0.5, mix: 0.6, color: new THREE.Color(0x5f6878) };
+
 export class MoleculeViewer {
   constructor(container) {
     this.container = container;
@@ -141,11 +144,16 @@ export class MoleculeViewer {
   // Public API
   // ----------------------------------------------------------------------
 
-  /** Load a new molecule: re-centres, re-orients and fits the camera. */
-  setMolecule(atoms, bonds) {
+  /**
+   * Load a new molecule: re-centres, re-orients and fits the camera.
+   * surroundings: the first n atoms are context and are drawn faint. keepAxes: keep the file's axes (y up) instead
+   * of turning the molecule to its principal axes, e.g. so a membrane is seen side on.
+   */
+  setMolecule(atoms, bonds, { surroundings = 0, keepAxes = false } = {}) {
     this.atoms = atoms;
     this.bonds = bonds;
-    this._orient(atoms);
+    this.surroundings = surroundings;
+    this._orient(atoms, keepAxes);
     this._rebuild();
     this.fitView();
   }
@@ -317,13 +325,17 @@ export class MoleculeViewer {
    * left–right, the next along the screen's vertical, and the thinnest points at
    * the viewer. Flat molecules (benzene, porphyrins...) therefore open face-on.
    */
-  _orient(atoms) {
+  _orient(atoms, keepAxes = false) {
     const n = atoms.length;
     const c = new THREE.Vector3();
     for (const a of atoms) c.add(new THREE.Vector3(a.x, a.y, a.z));
     c.divideScalar(Math.max(n, 1));
     this.center.copy(c);
     this.group.position.copy(c).negate();
+    if (keepAxes) {
+      this.pivot.quaternion.identity();
+      return;
+    }
 
     // covariance matrix
     const C = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
@@ -367,11 +379,14 @@ export class MoleculeViewer {
     this.visible = visible;
 
     const els = atoms.map((a) => getElement(a.symbol));
+    const faint = this.surroundings ?? 0;
     const radii = (this.radii = new Float32Array(n));
-    for (let i = 0; i < n; i++) radii[i] = style.atomRadius(els[i]);
+    for (let i = 0; i < n; i++) radii[i] = style.atomRadius(els[i]) * (i < faint ? FAINT.size : 1);
 
     const m = new THREE.Matrix4();
     const col = new THREE.Color();
+    /** Atom i's colour, set into `col`. */
+    const tint = (i) => (i < faint ? col.setHex(els[i].color).lerp(FAINT.color, FAINT.mix) : col.setHex(els[i].color));
 
     // ---- atoms: one InstancedMesh, one draw call ----
     const atomMesh = new THREE.InstancedMesh(this._sphereGeo(n), this.atomMat, Math.max(1, visible.length));
@@ -381,7 +396,7 @@ export class MoleculeViewer {
       const r = radii[i];
       m.makeScale(r, r, r).setPosition(a.x, a.y, a.z);
       atomMesh.setMatrixAt(k, m);
-      atomMesh.setColorAt(k, col.setHex(els[i].color));
+      atomMesh.setColorAt(k, tint(i));
     });
     atomMesh.instanceMatrix.needsUpdate = true;
     if (atomMesh.instanceColor) atomMesh.instanceColor.needsUpdate = true;
@@ -413,6 +428,7 @@ export class MoleculeViewer {
       for (let b = 0; b < vb.length; b += 2) {
         const i = vb[b];
         const j = vb[b + 1];
+        const rb = i < faint && j < faint ? r * FAINT.bond : r;
         A.set(atoms[i].x, atoms[i].y, atoms[i].z);
         B.set(atoms[j].x, atoms[j].y, atoms[j].z);
         mid.addVectors(A, B).multiplyScalar(0.5);
@@ -422,10 +438,10 @@ export class MoleculeViewer {
           dir.divideScalar(len);
           q.setFromUnitVectors(Y_AXIS, dir);
           pos.addVectors(P, mid).multiplyScalar(0.5);
-          scl.set(r, len, r);
+          scl.set(rb, len, rb);
           m.compose(pos, q, scl);
           mesh.setMatrixAt(k, m);
-          mesh.setColorAt(k, col.setHex(els[idx].color));
+          mesh.setColorAt(k, tint(idx));
           k++;
         }
       }
@@ -445,8 +461,8 @@ export class MoleculeViewer {
         const mx = (a.x + c.x) / 2;
         const my = (a.y + c.y) / 2;
         const mz = (a.z + c.z) / 2;
-        const ca = col.setHex(els[vb[b]].color).toArray();
-        const cc = col.setHex(els[vb[b + 1]].color).toArray();
+        const ca = tint(vb[b]).toArray();
+        const cc = tint(vb[b + 1]).toArray();
         positions.set([a.x, a.y, a.z, mx, my, mz, mx, my, mz, c.x, c.y, c.z], p);
         colors.set([...ca, ...ca, ...cc, ...cc], p);
         p += 12;

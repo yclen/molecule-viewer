@@ -153,7 +153,17 @@ Tabs (Basics, Triplet molecules, Xanthenes, Cyanines, Other dyes, Proteins, TTA 
     minimisation → lowest-energy conformer. Counter-ions are dropped. Bonds that MMFF gets wrong (C–I) or
     can't type (boron, so BODIPY uses UFF) are restrained to X-ray means. The PtOEP porphyrin core is
     placed from metalloporphyrin crystal averages, because MMFF puckers porphyrins.
-  - *Proteins*: X-ray structures from the RCSB PDB (chain A, chromophore kept, solvent removed).
+  - *Proteins*: X-ray structures from the RCSB PDB (chain A, chromophore kept, solvent removed). HaloTag7–JF525 is a
+    model, not a crystal structure of that dye: `tools/build_halotag.py` starts from HaloTag7 with TMR (6Y7A), keeps
+    every crystal atom the two dyes share, and grows the difluoroazetidines onto them. Its glow marks the dye.
+    Voltron525 and Ace2N-mNeon are composites too: `tools/build_voltron.py` joins rigid crystal domains (3AM6 with
+    5LTR or the HaloTag7–JF525 model), regrows only the junction residues (sequence from US 11,598,792), and invents
+    the pose of the two domains, so distances between them are illustrative. The rhodopsin is placed as OPM
+    (Orientations of Proteins in Membranes) places 3AM6. "Voltron525 in a membrane" sets that model into a POPC
+    bilayer (`tools/build_membrane.py`): the last frame of a published 270 ns MD run (Ollila, Ferreira and Topgaard,
+    Zenodo 13279), tiled, cut to a disc, and stripped of lipids touching the protein. Nothing is relaxed afterwards
+    and there is no water. Its index entry sets `surroundings` (the first n atoms, drawn faint) and `keepAxes`
+    (file axes kept, so the membrane is seen side on).
 - **Validation**: `docs/geometry-report.md` lists every bond type per molecule against typical
   crystallographic ranges, plus a bond-by-bond comparison with PubChem's own 3D conformer where one exists.
 

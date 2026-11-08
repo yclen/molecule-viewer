@@ -18,5 +18,119 @@
     "file": "mcherry.xyz",
     "name": "mCherry (2H5Q)",
     "description": "Monomeric red FP derived from DsRed. Abs 587 / Em 610 nm."
+  },
+  {
+    "file": "jf525.xyz",
+    "name": "JF525",
+    "description": "Janelia Fluor 525 on its own: a rhodamine with two 3,3-difluoroazetidines. The free acid; linkers attach at the spare carboxyl. Abs 525 / Em 549 nm.",
+    "sites": [
+      {
+        "label": "JF525",
+        "kind": "dye",
+        "last": 56
+      }
+    ]
+  },
+  {
+    "file": "jf525-halotag-ligand.xyz",
+    "name": "JF525 HaloTag ligand",
+    "description": "Janelia Fluor 525: a rhodamine with two 3,3-difluoroazetidines, plus the chloroalkane linker that HaloTag grabs. Abs 525 / Em 549 nm.",
+    "sites": [
+      {
+        "label": "JF525",
+        "kind": "dye",
+        "last": 89
+      }
+    ]
+  },
+  {
+    "file": "halotag7.xyz",
+    "name": "HaloTag7 (6Y7A)",
+    "description": "Engineered bacterial dehalogenase, 293 residues, 1.40 Å X-ray structure. Asp106 at the bottom of its tunnel attacks the ligand's chloroalkane. Protein only."
+  },
+  {
+    "file": "halotag7-jf525.xyz",
+    "name": "HaloTag7–JF525",
+    "description": "JF525 bonded to Asp106; the chloride has left. Model: the TMR dye in 6Y7A with its amino groups changed to difluoroazetidines. The dye starts lit so you can find it.",
+    "sites": [
+      {
+        "label": "JF525",
+        "kind": "dye",
+        "last": 88,
+        "on": true
+      }
+    ]
+  },
+  {
+    "file": "ace-rhodopsin.xyz",
+    "name": "Acetabularia rhodopsin (3AM6)",
+    "description": "Seven-helix proton pump from a green alga, 3.20 Å X-ray structure. Retinal sits in the middle, bonded to Lys211. Parent of the voltage sensor in Voltron. The retinal starts lit.",
+    "sites": [
+      {
+        "label": "Retinal",
+        "kind": "retinal",
+        "last": 20,
+        "on": true
+      }
+    ]
+  },
+  {
+    "file": "voltron525.xyz",
+    "name": "Voltron525 (model)",
+    "description": "Ace2N rhodopsin fused straight to HaloTag7 carrying JF525: five residues removed, no linker. Membrane voltage shifts the retinal's absorption, which quenches the dye by FRET. Composite: the pose of the two domains is modelled.",
+    "sites": [
+      {
+        "label": "Retinal",
+        "kind": "retinal",
+        "last": 20,
+        "skip": 88
+      },
+      {
+        "label": "JF525",
+        "kind": "dye",
+        "last": 88,
+        "on": true
+      }
+    ]
+  },
+  {
+    "file": "ace2n-mneon.xyz",
+    "name": "Ace2N-mNeon (model)",
+    "description": "The same rhodopsin fused to the fluorescent protein mNeonGreen, a GFP-like barrel, and Voltron's predecessor. Composite: the pose of the two domains is modelled.",
+    "sites": [
+      {
+        "label": "Retinal",
+        "kind": "retinal",
+        "last": 20,
+        "skip": 19
+      },
+      {
+        "label": "mNeonGreen",
+        "kind": "fp",
+        "last": 19,
+        "on": true
+      }
+    ]
+  },
+  {
+    "file": "voltron525-membrane.xyz",
+    "name": "Voltron525 in a membrane (model)",
+    "description": "Voltron525 set into a POPC bilayer, seen side on: cytoplasm below, outside above. The lipids are a frame from a published simulation, drawn faint; nothing was relaxed around the protein.",
+    "sites": [
+      {
+        "label": "Retinal",
+        "kind": "retinal",
+        "last": 20,
+        "skip": 88
+      },
+      {
+        "label": "JF525",
+        "kind": "dye",
+        "last": 88,
+        "on": true
+      }
+    ],
+    "surroundings": 12220,
+    "keepAxes": true
   }
 ]

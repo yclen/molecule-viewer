@@ -57,8 +57,11 @@ const bondsFor = (i) => (state.bonds[i] ??= detectBonds(state.frames[i].atoms));
 // Loading
 // ---------------------------------------------------------------------------
 
-/** objectKey: what excited states are remembered under (an example's key, or the file name). */
-function loadText(text, name, sites = null, objectKey = name) {
+/**
+ * objectKey: what excited states are remembered under (an example's key, or the file name).
+ * view: { surroundings, keepAxes } for the viewer (see MoleculeViewer.setMolecule).
+ */
+function loadText(text, name, sites = null, objectKey = name, view = {}) {
   let frames;
   try {
     frames = parseXYZ(text);
@@ -69,7 +72,7 @@ function loadText(text, name, sites = null, objectKey = name) {
   stopPlayback();
   Object.assign(state, { name, frames, bonds: new Array(frames.length), frame: 0 });
   setPicked([]);
-  viewer.setMolecule(frames[0].atoms, bondsFor(0));
+  viewer.setMolecule(frames[0].atoms, bondsFor(0), view);
   setSites(objectKey, sites ?? [{ label: 'Whole molecule', kind: 'molecule', atoms: frames[0].atoms.map((_, i) => i) }]);
   $('empty-state').hidden = true;
   $('info').hidden = false;
@@ -100,10 +103,22 @@ function loadExample(tab, entry) {
   if (entry.param) return loadParametric(tab, entry, paramValues.get(key) ?? entry.param.default);
   const text = SAMPLE_TEXT[key];
   if (text === undefined) return toast(`Example ${key} is missing.`);
-  if (loadText(text, entry.name, null, key)) {
+  const view = { surroundings: entry.surroundings ?? 0, keepAxes: Boolean(entry.keepAxes) };
+  if (loadText(text, entry.name, namedSites(entry, text), key, view)) {
     setActiveExample(key);
     setParamObject(null);
   }
+}
+
+/** Sites an example names in its index.json: each is `last` atoms from the file's end, less the final `skip`. Null if none. */
+function namedSites(entry, text) {
+  const n = Number.parseInt(text, 10);
+  return (
+    entry.sites?.map((s) => {
+      const first = n - s.last - (s.skip ?? 0);
+      return { ...s, atoms: Array.from({ length: s.last }, (_, k) => first + k) };
+    }) ?? null
+  );
 }
 
 // ---------------------------------------------------------------------------
