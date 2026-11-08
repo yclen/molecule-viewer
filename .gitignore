@@ -3,3 +3,4 @@ dist/
 tools/cache/
 __pycache__/
 *.pyc
+sim/data/

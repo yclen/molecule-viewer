@@ -1,0 +1,365 @@
+"""Command line for the TTA Flora 4 simulation. See README.md for the commands and what's in the data folder.
+
+  python sim/tta_sim.py run --n 8 --excRatio 0.5
+  python sim/tta_sim.py sweep --excRatio 0.01:10:log7 --hopRatio 10,100,1000 --name ratios
+  python sim/tta_sim.py exact --n 4
+  python sim/tta_sim.py pulse --excRatio 1 --hopRatio 100 --duration 5 --name first-pulse
+  python sim/tta_sim.py rebin 2026-11-06_first-pulse --bin 0.01
+  python sim/tta_sim.py plot 2026-11-06_first-pulse
+  python sim/tta_sim.py check
+"""
+
+import argparse
+import csv
+import itertools
+import json
+import shutil
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+
+import numba as nb
+import numpy as np
+
+from engine import EVENTS, exact, monte_carlo, per_site, pulse, summarize
+from rules import DEFAULTS, PULSE_DEFAULTS, build_rules, fret_efficiency, resolve, site_distances
+
+HERE = Path(__file__).resolve().parent
+DATA = HERE / 'data'
+EXACT_MAX_N = 8  # 3^10 strings. Takes a couple of minutes
+BINS_PER_LIFETIME = 10  # default histogram bin: a tenth of the singlet lifetime
+
+
+def parse_values(name, text):
+    """'5' | '1,2,5' | '0:12' (whole numbers) | '1:300:6' (6 evenly spaced) | '1:300:log6' (6 spaced by ratio)."""
+    if ',' in text:
+        values = [float(v) for v in text.split(',')]
+    elif ':' in text:
+        parts = text.split(':')
+        lo, hi = float(parts[0]), float(parts[1])
+        if len(parts) == 2:
+            values = list(np.arange(lo, hi + 1))
+        elif parts[2].startswith('log'):
+            values = list(np.geomspace(lo, hi, int(parts[2][3:])))
+        else:
+            values = list(np.linspace(lo, hi, int(parts[2])))
+    else:
+        values = [float(text)]
+    return [int(v) if name in ('n', 'block') else float(v) for v in values]
+
+
+def grid(args, defaults=DEFAULTS):
+    """Every combination of the values given on the command line, as (parameters, names that vary)."""
+    choices = {name: parse_values(name, getattr(args, name)) if getattr(args, name) is not None else [value]
+               for name, value in defaults.items()}
+    swept = [name for name, values in choices.items() if len(values) > 1]
+    return [resolve(dict(zip(choices, combo))) for combo in itertools.product(*choices.values())], swept
+
+
+def site_names(n):
+    return ['sensitizer'] + [f'DPA {i}' for i in range(1, n + 1)] + ['perylene']
+
+
+def new_run_folder(mode, name, swept):
+    label = name or '_'.join([mode, *swept])
+    stem = f'{datetime.now():%Y-%m-%d}_{label}'
+    folder, k = DATA / stem, 1
+    while folder.exists():
+        k += 1
+        folder = DATA / f'{stem}_{k}'
+    folder.mkdir(parents=True)
+    return folder
+
+
+def add_to_index(folder, mode, points, swept, seconds):
+    index = DATA / 'index.csv'
+    fresh = not index.exists()
+    with index.open('a', newline='') as out:
+        writer = csv.writer(out)
+        if fresh:
+            writer.writerow(['folder', 'date', 'mode', 'points', 'swept', 'seconds', 'command'])
+        writer.writerow([folder.name, f'{datetime.now():%Y-%m-%d %H:%M}', mode, points, ' '.join(swept),
+                         round(seconds, 1), ' '.join(sys.argv[1:])])
+
+
+def solve(mode, p, args, seed):
+    rules = build_rules(p)
+    sites = p['n'] + 2
+    if mode == 'exact':
+        return exact(rules, sites)
+    return monte_carlo(rules, sites, args.excitations, args.replicas, seed)
+
+
+def run_points(mode, args):
+    points, swept = grid(args)
+    if mode == 'exact' and max(p['n'] for p in points) > EXACT_MAX_N:
+        sys.exit(f'exact only goes up to n = {EXACT_MAX_N}: it has 3^(n + 2) strings to solve')
+    folder = new_run_folder(mode, args.name, swept)
+    shutil.copy(HERE / 'rules.py', folder / 'rules.py')
+    (folder / 'params.json').write_text(json.dumps({
+        'mode': mode, 'command': ' '.join(sys.argv[1:]), 'date': f'{datetime.now():%Y-%m-%d %H:%M:%S}',
+        'defaults': DEFAULTS, 'swept': {name: sorted({p[name] for p in points}) for name in swept},
+        'points': len(points), 'excitations_per_point': args.excitations, 'replicas': args.replicas, 'seed': args.seed,
+        'threads': nb.get_num_threads(),
+    }, indent=2))
+
+    if mode != 'exact':  # load the compiled code now, so it isn't timed as part of the first point
+        monte_carlo(build_rules({**DEFAULTS, 'n': 0}), 2, 2, 2, 1, 0)
+
+    started = time.time()
+    with (folder / 'results.csv').open('w', newline='') as results, (folder / 'sites.csv').open('w', newline='') as by_site:
+        result_rows = site_rows = None
+        for i, p in enumerate(points):
+            began = time.perf_counter()
+            tally = solve(mode, p, args, args.seed + i * args.replicas)
+            wall = time.perf_counter() - began
+            metrics = summarize(tally)
+            events = tally.counts.sum() if mode != 'exact' else np.nan  # exact has rates, not counted events
+            timing = {'wall_s': wall, 'events': events, 'events_per_wall_s': events / wall,
+                      'sim_seconds': tally.time if mode != 'exact' else np.nan}
+            row = {'point': i, **p, **metrics, **timing}
+            if result_rows is None:
+                result_rows = csv.DictWriter(results, row.keys())
+                result_rows.writeheader()
+            result_rows.writerow(row)
+            results.flush()  # a stopped sweep keeps what it finished
+
+            r = np.r_[0.0, site_distances(p['n'], p['spacing'])]
+            E = np.r_[0.0, fret_efficiency(r[1:], p['fretRadius'])]
+            sites = per_site(tally)
+            for s, name in enumerate(site_names(p['n'])):
+                row = {'point': i, 'n': p['n'], 'site': s, 'name': name, 'r_nm': r[s], 'fret_efficiency': E[s], **sites[s]}
+                if site_rows is None:
+                    site_rows = csv.DictWriter(by_site, row.keys())
+                    site_rows.writeheader()
+                site_rows.writerow(row)
+            if len(points) > 1 and (i + 1) % max(1, len(points) // 10) == 0:
+                print(f'{i + 1}/{len(points)} points, {time.time() - started:.0f} s', flush=True)
+    seconds = time.time() - started
+    add_to_index(folder, mode, len(points), swept, seconds)
+    if len(points) == 1:
+        report(points[0], metrics, sites, r, E)
+    print(f'\nSimulated {len(points)} point{"s" * (len(points) > 1)} in {seconds:.1f} s'
+          f' on {nb.get_num_threads()} threads')
+    print(f'Saved to {folder}')
+
+
+def linear_edges(latest, width):
+    return width * np.arange(int(latest / width) + 2)
+
+
+def log_edges(times, bins):
+    return np.geomspace(times[0], times[-1], bins + 1)
+
+
+def histogram_rows(point, photons, perylene, molecules, duration, edges):
+    """One dict per time bin. photons_per_molecule_per_s doesn't depend on bin width or how many molecules ran."""
+    total = np.histogram(photons['time'], edges)[0]
+    from_perylene = np.histogram(photons['time'][photons['site'] == perylene], edges)[0]
+    scale = 1 / (molecules * np.diff(edges))
+    return [{
+        'point': point, 'bin_start_s': edges[k], 'bin_end_s': edges[k + 1], 'pulse_on': int(edges[k] < duration),
+        'photons': total[k], 'perylene_photons': from_perylene[k], 'dpa_photons': total[k] - from_perylene[k],
+        'photons_per_molecule_per_s': total[k] * scale[k], 'error': total[k] ** 0.5 * scale[k],
+    } for k in range(len(total))]
+
+
+def pulse_metrics(p, run, molecules, histogram):
+    time_s = run.time
+    m = summarize(run.tally)
+    for name in ('excitations_per_s', 'photons_per_s', 'mean_triplets_present', 'mean_singlets_present', 'time_to_photon_s'):
+        del m[name]  # these describe a steady state
+    has_photons = time_s.size > 0
+    busiest = max(histogram, key=lambda row: row['photons'])
+    return {
+        'molecules': molecules,
+        'excitations_per_molecule': run.excitations.sum() / molecules,
+        'photons_per_molecule': time_s.size / molecules,
+        **m,
+        'share_of_molecules_with_a_photon': np.unique(run.molecule).size / molecules,
+        'share_of_photons_after_pulse': (time_s >= p['duration']).mean() if has_photons else np.nan,
+        'peak_bin_start_s': busiest['bin_start_s'] if has_photons else np.nan,
+        'mean_emission_s': time_s.mean() if has_photons else np.nan,
+        'median_emission_s': np.median(time_s) if has_photons else np.nan,
+        'last_photon_s': time_s[-1] if has_photons else np.nan,
+        'time_to_photon_s': (time_s - run.born).mean() if has_photons else np.nan,
+    }
+
+
+def run_pulses(args):
+    points, swept = grid(args, PULSE_DEFAULTS)
+    folder = new_run_folder('pulse', args.name, swept)
+    (folder / 'photons').mkdir()
+    shutil.copy(HERE / 'rules.py', folder / 'rules.py')
+    (folder / 'params.json').write_text(json.dumps({
+        'mode': 'pulse', 'command': ' '.join(sys.argv[1:]), 'date': f'{datetime.now():%Y-%m-%d %H:%M:%S}',
+        'defaults': PULSE_DEFAULTS, 'swept': {name: sorted({p[name] for p in points}) for name in swept},
+        'points': len(points), 'molecules': args.molecules, 'bin_s': args.bin or 'tauS / 10', 'seed': args.seed,
+        'threads': nb.get_num_threads(),
+    }, indent=2))
+    pulse(build_rules({**DEFAULTS, 'n': 0}), 2, 2, 0.1, 1)  # load the compiled code now, so it isn't timed
+
+    started = time.time()
+    outputs = {name: (folder / f'{name}.csv').open('w', newline='') for name in ('summary', 'histogram', 'sites')}
+    writers = {}
+
+    def write(name, rows):
+        if name not in writers:
+            writers[name] = csv.DictWriter(outputs[name], rows[0].keys())
+            writers[name].writeheader()
+        writers[name].writerows(rows)
+        outputs[name].flush()  # a stopped sweep keeps what it finished
+
+    for i, p in enumerate(points):
+        began = time.perf_counter()
+        run = pulse(build_rules(p), p['n'] + 2, args.molecules, p['duration'], args.seed + 256 * i)
+        wall = time.perf_counter() - began
+
+        np.savez_compressed(folder / 'photons' / f'point_{i:04d}.npz', time=run.time, site=run.site, molecule=run.molecule,
+                            born=run.born, excitations=run.excitations)
+        latest = max(run.time[-1] if run.time.size else 0.0, p['duration'])
+        width = args.bin or p['tauS'] / BINS_PER_LIFETIME
+        photons = {'time': run.time, 'site': run.site}
+        histogram = histogram_rows(i, photons, p['n'] + 1, args.molecules, p['duration'], linear_edges(latest, width))
+        metrics = pulse_metrics(p, run, args.molecules, histogram)
+        events = run.tally.counts.sum()
+        write('summary', [{'point': i, **p, **metrics, 'wall_s': wall, 'events': events, 'events_per_wall_s': events / wall}])
+        write('histogram', histogram)
+
+        r = np.r_[0.0, site_distances(p['n'], p['spacing'])]
+        E = np.r_[0.0, fret_efficiency(r[1:], p['fretRadius'])]
+        sites = per_site(run.tally)
+        write('sites', [{'point': i, 'n': p['n'], 'site': s, 'name': name, 'r_nm': r[s], 'fret_efficiency': E[s],
+                         **{k: v for k, v in sites[s].items() if not k.startswith('time_in')}}
+                        for s, name in enumerate(site_names(p['n']))])
+        if len(points) > 1 and (i + 1) % max(1, len(points) // 10) == 0:
+            print(f'{i + 1}/{len(points)} points, {time.time() - started:.0f} s', flush=True)
+    for output in outputs.values():
+        output.close()
+    seconds = time.time() - started
+    add_to_index(folder, 'pulse', len(points), swept, seconds)
+    if len(points) == 1:
+        print(f"excitations per molecule  {metrics['excitations_per_molecule']:.3f}")
+        print(f"photons per molecule      {metrics['photons_per_molecule']:.4f}")
+        print(f"photons per excitation    {metrics['photons_per_excitation']:.4f}")
+        print(f"photons after the pulse   {metrics['share_of_photons_after_pulse']:.1%}")
+        print(f"peak bin starts at        {metrics['peak_bin_start_s']:.2f} s")
+        print(f"mean / last photon        {metrics['mean_emission_s']:.2f} s / {metrics['last_photon_s']:.2f} s")
+    print(f'\nSimulated {len(points)} point{"s" * (len(points) > 1)} of {args.molecules:,} molecules in {seconds:.1f} s'
+          f' on {nb.get_num_threads()} threads')
+    print(f'Saved to {folder}')
+
+
+def rebin(args):
+    """Build a new histogram from a pulse run's saved photons. The original histogram stays as it is."""
+    folder = DATA / args.folder
+    if not (folder / 'photons').is_dir():
+        sys.exit(f'no saved photons in {folder}')
+    rows = []
+    with (folder / 'summary.csv').open(newline='') as summary:
+        for entry in csv.DictReader(summary):
+            point = int(entry['point'])
+            with np.load(folder / 'photons' / f'point_{point:04d}.npz') as saved:
+                photons = {'time': saved['time'], 'site': saved['site']}
+            if photons['time'].size == 0:
+                continue
+            duration = float(entry['duration'])
+            edges = (log_edges(photons['time'], args.logbins) if args.logbins else
+                     linear_edges(max(photons['time'][-1], duration), args.bin))
+            rows += histogram_rows(point, photons, int(entry['n']) + 1, int(entry['molecules']), duration, edges)
+    name = f'histogram_log{args.logbins}.csv' if args.logbins else f'histogram_bin{args.bin:g}.csv'
+    with (folder / name).open('w', newline='') as out:
+        writer = csv.DictWriter(out, rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f'Saved {folder / name}')
+
+
+def report(p, m, sites, r, E):
+    se = m['photons_per_excitation_se']
+    print(f"photons per excitation  {m['photons_per_excitation']:.4f}" + ('' if np.isnan(se) else f' +/- {se:.4f}'))
+    print(f"  from perylene         {m['perylene_photons']:.4f}")
+    print(f"  from DPA              {m['dpa_photons']:.4f}")
+    print(f"ISC yield               {m['isc_yield']:.4f}")
+    print(f"back transfers          {m['back_transfers']:.4f}")
+    print(f"triplets decayed        {m['triplets_decayed']:.4f}")
+    print(f"time to photon          {m['time_to_photon_s']:.2f} s")
+    print(f"balance (should be 1)   triplets {m['triplet_balance']:.4f}, singlets {m['singlet_balance']:.4f}\n")
+    print(f"{'site':<11}{'r nm':>7}{'FRET':>8}{'photons':>9}{'back':>8}{'TTA S':>8}{'TTA fail':>9}{'time T':>8}{'time S':>8}")
+    for s, name in enumerate(site_names(p['n'])):
+        v = sites[s]
+        print(f"{name:<11}{r[s]:>7.2f}{E[s]:>8.3f}{v['photons']:>9.4f}{v['back_transfers']:>8.4f}{v['tta_singlet']:>8.4f}"
+              f"{v['tta_failed']:>9.4f}{v['time_in_T']:>8.4f}{v['time_in_S']:>8.4f}")
+
+
+def check(args):
+    """Compare Monte Carlo with the exact solve, and check the bookkeeping, on a few settings."""
+    failed = 0
+    settings = ({'n': 0}, {'n': 2}, {'n': 4}, {'n': 4, 'kExc': 5.0}, {'n': 5, 'f': 1.0, 'fretRadius': 0.0})
+    for i, changes in enumerate(settings):
+        p = {**DEFAULTS, **changes}
+        rules, sites = build_rules(p), p['n'] + 2
+        truth = summarize(exact(rules, sites))
+        tally = monte_carlo(rules, sites, 2_000_000, 64, args.seed + 1000 * i)  # own seed: shared ones correlate
+        mc = summarize(tally)
+        gap = abs(mc['photons_per_excitation'] - truth['photons_per_excitation'])
+        sigmas = gap / mc['photons_per_excitation_se']
+        books = max(abs(mc['triplet_balance'] - 1), abs(mc['singlet_balance'] - 1))
+        ok = sigmas < 4 and books < 1e-3
+        failed += not ok
+        print(f"{'ok  ' if ok else 'FAIL'} {str(changes):<46} exact {truth['photons_per_excitation']:.5f}  "
+              f"Monte Carlo {mc['photons_per_excitation']:.5f} ({sigmas:.1f} sigma)  books off by {books:.1e}")
+
+    # a pulse run ends with every molecule back in all G, so its bookkeeping has to balance exactly
+    p = {**PULSE_DEFAULTS, 'n': 4}
+    run = pulse(build_rules(p), p['n'] + 2, 20_000, p['duration'], args.seed)
+    count = {event: run.tally.counts[i].sum() for i, event in enumerate(EVENTS)}
+    gaps = [count['isc'] - 2 * count['tta_singlet'] - count['tta_failed'] - count['triplet_lost'],
+            count['excitation'] + count['back_transfer'] - count['isc'] - count['sens_singlet_lost'],
+            count['tta_singlet'] - count['photon'] - count['back_transfer'],
+            count['photon'] - run.time.size]
+    ok = not any(gaps)
+    failed += not ok
+    print(f"{'ok  ' if ok else 'FAIL'} pulse bookkeeping: every triplet, singlet and photon accounted for {gaps}")
+    sys.exit(1 if failed else 0)
+
+
+def main():
+    parser = argparse.ArgumentParser(description='TTA Flora 4 simulation')
+    parser.add_argument('mode', choices=['run', 'sweep', 'exact', 'pulse', 'rebin', 'plot', 'check'])
+    parser.add_argument('folder', nargs='?', help='rebin, plot: the run folder inside sim/data')
+    for name, value in PULSE_DEFAULTS.items():
+        parser.add_argument(f'--{name}', help=f'default {value}. One value, a,b,c, a:b, a:b:count or a:b:logcount')
+    parser.add_argument('--excitations', type=int, default=200_000, help='excitations per point, across all replicas')
+    parser.add_argument('--replicas', type=int, default=64)
+    parser.add_argument('--seed', type=int, default=1)
+    parser.add_argument('--name', help='run name, used in the folder name')
+    parser.add_argument('--molecules', type=int, default=100_000, help='pulse: how many molecules to flash')
+    parser.add_argument('--bin', type=float, help='pulse, rebin: histogram bin width in s (pulse default: tauS / 10)')
+    parser.add_argument('--logbins', type=int, help='rebin: this many bins spaced by ratio, instead of --bin')
+    parser.add_argument('--xmax', type=float, help='plot: end of the time axis in s')
+    args = parser.parse_args()
+    if args.duration is not None and args.mode != 'pulse':
+        parser.error('--duration only applies to pulse')
+    if args.mode in ('rebin', 'plot') and not args.folder:
+        parser.error(f'{args.mode} needs a run folder')
+    if args.mode == 'rebin' and not (args.bin or args.logbins):
+        parser.error('rebin needs --bin or --logbins')
+    if args.mode == 'check':
+        check(args)
+    elif args.mode == 'pulse':
+        run_pulses(args)
+    elif args.mode == 'rebin':
+        rebin(args)
+    elif args.mode == 'plot':
+        from plot_pulse import plot_run  # only this command needs matplotlib
+        from plot_yield import plot_sweep
+        folder = DATA / args.folder
+        print(f'Saved to {plot_run(folder, args.xmax) if (folder / "photons").is_dir() else plot_sweep(folder)}')
+    else:
+        run_points(args.mode, args)
+
+
+if __name__ == '__main__':
+    main()
