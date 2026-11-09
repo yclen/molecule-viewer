@@ -276,12 +276,10 @@ class Window(QtWidgets.QMainWindow):
             self.plot.getAxis(side).setPen(pg.mkPen(BASE))
             self.plot.getAxis(side).setTextPen(pg.mkPen(MUTED))
         self.plot.addLegend(offset=(-20, 12), labelTextColor=INK, labelTextSize='10pt')
-        self.band = pg.LinearRegionItem((0, 1), movable=False, brush=pg.mkBrush(137, 135, 129, 36), pen=pg.mkPen(None))
+        self.band = pg.LinearRegionItem((0, 1), movable=False, brush=pg.mkBrush(255, 33, 0, 40), pen=pg.mkPen(None))
         self.band.setZValue(-10)
         self.plot.addItem(self.band, ignoreBounds=True)
-        # perylene is filled and DPA isn't, so the two can be told apart without the colours
-        self.perylene_curve = self.plot.plot(stepMode='center', pen=pg.mkPen(PERYLENE, width=2), fillLevel=0,
-                                             brush=pg.mkBrush(235, 104, 52, 45), name='Perylene photons')
+        self.perylene_curve = self.plot.plot(stepMode='center', pen=pg.mkPen(PERYLENE, width=2), name='Perylene photons')
         self.dpa_curve = self.plot.plot(stepMode='center', pen=pg.mkPen(DPA, width=2), name='DPA photons')
         self.cursor = pg.InfiniteLine(angle=90, pen=pg.mkPen(BASE))
         self.cursor.hide()
@@ -351,7 +349,6 @@ class Window(QtWidgets.QMainWindow):
     def log_changed(self, on):
         self.plot.setLogMode(y=on)
         self.plot.setXRange(0, self.measurement.p['window'], padding=0)  # setLogMode resets it
-        self.perylene_curve.setFillLevel(np.log10(EMPTY_BIN) if on else 0)
         self.last_drawn = None
 
     def toggle(self):

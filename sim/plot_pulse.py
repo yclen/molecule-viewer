@@ -13,7 +13,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
-DPA, PERYLENE = '#2a78d6', '#eb6834'
+DPA, PERYLENE = '#2a78d6', '#11d8f2'  # perylene emits cyan blue, DPA a deeper blue
 INK, MUTED, GRID, BASE = '#52514e', '#898781', '#e1e0d9', '#c3c2b7'
 MOST_PANELS = 6
 
