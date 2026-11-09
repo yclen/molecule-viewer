@@ -4,9 +4,10 @@ monte_carlo: a Gillespie simulation of the long-run behaviour. Add up the rates 
 random time, fire one.
 exact: the same long-run answers by solving for the share of time in every possible string, with no random noise.
 There are 3^(n + 2) strings, so this is for checking results at small n, not for sweeps.
+pulse_exact: the expected pulse histogram the same way, by following the share of molecules in every string over time.
 pulse: many molecules, each starting in all G, with a square pulse of light. Records every photon's emission time.
 
-All three give a Tally, so summarize() treats them alike.
+monte_carlo, exact and pulse give a Tally, so summarize() treats them alike.
 """
 
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ import numba as nb
 import numpy as np
 import scipy.sparse as sparse
 import scipy.sparse.linalg as linalg
+from scipy.interpolate import PchipInterpolator
 
 EVENTS = ['excitation', 'isc', 'sens_singlet_lost', 'hop', 'triplet_lost', 'tta_singlet', 'tta_failed', 'photon',
           'back_transfer']
@@ -251,18 +253,30 @@ def pulse_alone(arrays, sites, molecules, duration, seed):
         room = found  # more photons than there was room for: same seed, so this run fits exactly
 
 
-def exact(rules, sites):
-    """Long-run behaviour by linear algebra: solve pi Q = 0 over all 3^sites strings."""
-    size = 3 ** sites
-    index = np.arange(size)
+def _transitions(rules, sites):
+    """Every rule as (strings it can fire from, the strings it leads to, rate, event, where), over all 3^sites strings.
+
+    String number k has letter (k // 3^s) % 3 at site s, so all G is string 0.
+    """
+    index = np.arange(3 ** sites)
     digit = [(index // 3 ** s) % 3 for s in range(sites)]
-    rows, cols, vals, fires = [], [], [], []
+    moves = []
     for a, b, fa, fb, ta, tb, rate, event, where in rules:
         can = digit[a] == fa
         if b >= 0:
             can = can & (digit[b] == fb)
         src = index[can]
         dst = src + (ta - fa) * 3 ** a + ((tb - fb) * 3 ** b if b >= 0 else 0)
+        moves.append((src, dst, rate, event, where))
+    return moves, digit
+
+
+def exact(rules, sites):
+    """Long-run behaviour by linear algebra: solve pi Q = 0 over all 3^sites strings."""
+    size = 3 ** sites
+    moves, digit = _transitions(rules, sites)
+    rows, cols, vals, fires = [], [], [], []
+    for src, dst, rate, event, where in moves:
         rows += [dst, src]
         cols += [src, src]
         vals += [np.full(src.size, rate), np.full(src.size, -rate)]
@@ -286,6 +300,148 @@ def exact(rules, sites):
         counts[event, where] += rate * pi[src].sum()
     occupancy = np.array([[pi[digit[s] == letter].sum() for letter in range(3)] for s in range(sites)])
     return Tally(counts, 1.0, occupancy)
+
+
+# pulse_exact: the share of molecules in every string, followed through time. It's a stiff system (hops are far
+# faster than emission), so it steps with a 2-stage L-stable SDIRK, which takes steps much longer than a hop without
+# going unstable. Each stage is a linear solve with the same matrix, done by GMRES with an incomplete LU of that matrix.
+_GAMMA = 1 - 2 ** -0.5  # the SDIRK's diagonal
+EXACT_ILU = {'drop_tol': 1e-3, 'fill_factor': 5}  # looser is quicker to set up, but needs more GMRES steps
+EXACT_STEPS_PER_LIFETIME = 10  # of tauS or tauSens, whichever is shorter
+EXACT_LEAST_STEPS = 10  # in the pulse, and after it
+EXACT_MOST_STEPS = 2000  # in the time window. A longer window takes longer steps
+EXACT_MOST_TAIL_STEPS = 2000  # after the window, until no molecule can still emit
+QUIET = 1e-7  # the count after the window stops when the molecules that can still emit are this share of excitations
+
+
+def exact_plan(p, window):
+    """The time steps for resolved parameters p: [(light on, step length, number of steps)], up to the window.
+
+    A step ends exactly where the pulse does.
+    """
+    step = max(min(p['tauS'], p['tauSens']) / EXACT_STEPS_PER_LIFETIME, window / EXACT_MOST_STEPS)
+    plan = []
+    for light, start, end in ((True, 0, min(p['duration'], window)), (False, p['duration'], window)):
+        if end > start:
+            count = max(EXACT_LEAST_STEPS, int(np.ceil((end - start) / step - 1e-9)))
+            plan.append((light, (end - start) / count, count))
+    return plan
+
+
+SETUP_S = {6: 0.19, 7: 1.2, 8: 7.3, 9: 110}  # measured: the incomplete LU fills in faster and faster as n grows
+
+
+def _setup_s(size):
+    n = round(np.log(size) / np.log(3)) - 2
+    return SETUP_S.get(n, 3e-8 * size ** 1.77 if n < 6 else SETUP_S[9] * 15 ** (n - 9))
+
+
+def _step_s(size, stiffness):
+    """One step. Stiffer steps (more hops per step) need more GMRES iterations."""
+    return 1.5e-7 * size ** 1.2 * (1 + 0.35 * np.log10(max(stiffness / 5, 1)))
+
+
+def exact_seconds(p, window):
+    """Roughly how long pulse_exact takes, on the machine it was timed on. The count after the window is a guess."""
+    size = 3 ** (p['n'] + 2)
+    plan = exact_plan(p, window)
+    seconds = sum(_setup_s(size) + _step_s(size, p['kHop'] * h) * count for _, h, count in plan)
+    after = sum(count for light, _, count in plan if not light) / 4
+    return seconds + after * _step_s(size, p['kHop'] * plan[-1][1])
+
+
+@dataclass
+class PulseExact:
+    times: np.ndarray  # the end of each step, from 0 to the window, s
+    perylene: np.ndarray  # expected photons per molecule from the perylene, from t = 0 to each time
+    dpa: np.ndarray  # the same from the DPAs
+    excitations: float  # per molecule, over the whole pulse. nan if the pulse lasts past the window
+    photons: float  # per molecule, counting the ones after the window. nan likewise
+    still_active: float  # share of molecules that could still emit when the count after the window stopped
+
+    def binned(self, edges):
+        """Expected perylene and DPA photons per molecule in each bin between `edges`."""
+        # each total only rises, and PCHIP keeps it rising, so no bin goes below 0
+        edges = np.clip(edges, 0, self.times[-1])
+        return [np.diff(PchipInterpolator(self.times, total)(edges)) for total in (self.perylene, self.dpa)]
+
+
+def pulse_exact(rules, p, window, progress=None):
+    """The expected pulse histogram, with no random noise: a pulse run with infinitely many molecules.
+
+    `rules` are build_rules(p), with p resolved. Every molecule starts in all G, with kExc on until p['duration'].
+    `progress(share done, what it's doing)` is called as it goes. exact_seconds says roughly how long it takes: at the
+    defaults, a few seconds up to n = 7, under a minute at n = 8, and each further n is several times longer.
+    """
+    sites = p['n'] + 2
+    size = 3 ** sites
+    moves, _ = _transitions(rules, sites)
+    counter = {PHOTON: lambda where: size if where == sites - 1 else size + 1, EXCITATION: lambda where: size + 2}
+
+    def matrix(light):
+        """Q, plus rows that add up perylene photons, DPA photons and excitations."""
+        rows, cols, vals = [], [], []
+        for src, dst, rate, event, where in moves:
+            if event == EXCITATION and not light:
+                continue
+            rows += [dst, src]
+            cols += [src, src]
+            vals += [np.full(src.size, rate), np.full(src.size, -rate)]
+            if event in counter:
+                rows.append(np.full(src.size, counter[event](where)))
+                cols.append(src)
+                vals.append(np.full(src.size, rate))
+        return sparse.csr_matrix((np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))),
+                                 shape=(size + 3, size + 3))
+
+    plan = exact_plan(p, window)
+    total = exact_seconds(p, window)
+    spent = 0.0
+
+    def report(seconds, doing):
+        nonlocal spent
+        spent += seconds
+        if progress:
+            progress(min(spent / total, 1.0), doing)
+
+    # all G, or one triplet with nothing else excited: neither can make a photon without a new excitation
+    quiet = [0] + [3 ** s for s in range(sites)]
+    x = np.zeros(size + 3)
+    x[0] = 1.0
+    times, counts = [0.0], [x[size:].copy()]
+    still_active = np.nan
+    for light, h, count in plan:
+        report(0, 'Preparing')
+        M = matrix(light)
+        A = (sparse.identity(size + 3, format='csr') - _GAMMA * h * M).tocsc()
+        ilu = linalg.LinearOperator(A.shape, linalg.spilu(A, **EXACT_ILU).solve)
+        report(_setup_s(size), 'Solving')
+        each = _step_s(size, p['kHop'] * h)
+        k1, k2 = np.zeros_like(x), np.zeros_like(x)
+
+        def step():
+            nonlocal x, k1, k2
+            k1, info1 = linalg.gmres(A, M @ x, x0=k1, M=ilu, rtol=1e-8, atol=0)
+            k2, info2 = linalg.gmres(A, M @ (x + (1 - _GAMMA) * h * k1), x0=k2, M=ilu, rtol=1e-8, atol=0)
+            if info1 or info2:
+                raise RuntimeError('the exact solve did not converge')
+            x = x + h * ((1 - _GAMMA) * k1 + _GAMMA * k2)
+
+        for _ in range(count):
+            step()
+            times.append(times[-1] + h)
+            counts.append(x[size:].copy())
+            report(each, 'Solving')
+        if not light:
+            for _ in range(EXACT_MOST_TAIL_STEPS):
+                still_active = x[:size].sum() - x[quiet].sum()
+                if still_active < QUIET * x[size + 2]:
+                    break
+                step()
+                report(each, 'Counting the photons after the window')
+    whole = p['duration'] <= window
+    return PulseExact(np.array(times), np.array(counts)[:, 0], np.array(counts)[:, 1],
+                      x[size + 2] if whole else np.nan, x[size] + x[size + 1] if whole else np.nan, still_active)
 
 
 def summarize(tally):

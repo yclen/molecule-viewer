@@ -11,7 +11,7 @@ Needs Python with `numpy`, `scipy` and `numba`. The first run compiles for a few
 | File | What it is |
 |---|---|
 | `rules.py` | Default parameters, site distances, FRET and every rule. **The file to edit.** |
-| `engine.py` | Monte Carlo, the exact solver and the metrics. |
+| `engine.py` | Monte Carlo, the exact solvers (long-run and pulse) and the metrics. |
 | `plot_pulse.py` | The figures for pulse runs. |
 | `plot_yield.py` | The quantum yield figure for sweeps. |
 | `tta_sim.py` | The commands and data saving. |
@@ -244,13 +244,26 @@ all `G`, gets one pulse and is followed until it's back in all `G`, so nothing c
 - **Molecules per s:** the rate to aim for, default 100,000. 0 means as fast as the machine can go. "Molecules per s" at the
   top is the rate actually reached, averaged over 2 s.
 - **Bin width, log axis:** these change only the view, so the counts stay. Bins are multiples of `tauS / 100`.
-- **Hover** over the histogram to read a bin. Drag and scroll to look along the time axis, and the small "A" in the corner
-  of the plot resets the view.
+- **Exact solve:** works out the histogram the counts are heading for, with no random noise, while they pile up. It
+  runs in its own process, with a progress bar and a time left, and when it's done it's drawn over the counts in darker
+  colours, scaled to the molecules counted so far. "Exact yield" is its quantum yield, photons after the window
+  included. Below the checkbox is how long it should take at the current values. Above `n = 9`, or when it would take
+  over 10 minutes, it isn't offered and says why. Changing a value starts a new solve; Clear, the bin width and the log
+  axis don't. `formulas.md` has how it works.
+- **Hover** over the histogram to read a bin, with what the exact solve expects there when it's shown. Drag and scroll to
+  look along the time axis, and the small "A" in the corner of the plot resets the view.
 - **Save** writes `histogram.csv` (the same columns as a pulse run), `summary.csv`, `params.json`, `rules.py` and
   `histogram.png` to a new `sim/data/YYYY-MM-DD_live/` folder. It holds the histogram at the current bin width, not each
-  photon, so `rebin` and `plot` don't work on it.
+  photon, so `rebin` and `plot` don't work on it. With the exact solve shown, `histogram.csv` also has
+  `exact_perylene_photons` and `exact_dpa_photons` (the photons it expects in each bin from the molecules counted) and
+  `summary.csv` has `exact_photons_per_excitation`.
 
 The ± on the quantum yield is the counting error: the square root of the photons, over the excitations.
+
+The exact solve has a row for every one of the `3^(n + 2)` strings, so `n` sets how long it takes. At the defaults on the
+development machine, with counting running alongside: a few seconds up to `n = 7`, about 45 s at `n = 8` and several
+minutes at `n = 9`. Hopping speed barely matters. A pulse longer than the time window gives no exact yield, because
+the solve stops at the window.
 
 Speed depends on how many excitations each molecule gets. With 5 s pulses on the development machine, 100,000 molecules per
 second held at `excRatio` 1 and 10, and flat out it reached about 160,000 at `excRatio` 10. Long, bright pulses are far

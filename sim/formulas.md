@@ -262,8 +262,31 @@ I(t) = \sum_x P_x(t) \sum_{\text{photon rules } r \text{ enabled at } x} k_r,
 $$
 
 so with $M$ molecules, the expected count in a histogram bin from $t_1$ to $t_2$ is $M \int_{t_1}^{t_2} I(t)\, dt$.
-This is the exact curve the pulse histogram estimates. The code doesn't compute it yet; it's the planned comparison
-for the pulse runs.
+This is the exact curve the pulse histogram estimates, and `pulse_exact` in `engine.py` works it out. `live.py`
+draws it over the counts when "Exact solve" is ticked.
+
+`pulse_exact` doesn't form $e^{Qt}$. It adds three rows to $Q$ that add up perylene photons, DPA photons and
+excitations, so their entries in $\mathbf{P}$ become running totals, and steps $d\mathbf{P}/dt = Q\,\mathbf{P}$
+through time. Hops are far faster than emission, so the system is stiff: an ordinary step would have to be shorter than
+a hop to stay stable. It uses a two-stage L-stable SDIRK instead, which stays stable with steps far longer than a hop
+and damps the fast hop transients rather than tracking them. Each step is
+
+$$
+\mathbf{k}_1 = (I - \gamma h Q)^{-1}\, Q\,\mathbf{P}_n, \qquad
+\mathbf{k}_2 = (I - \gamma h Q)^{-1}\, Q\,\big(\mathbf{P}_n + (1 - \gamma) h\, \mathbf{k}_1\big), \qquad
+\mathbf{P}_{n+1} = \mathbf{P}_n + h\big((1 - \gamma)\,\mathbf{k}_1 + \gamma\,\mathbf{k}_2\big),
+$$
+
+with $\gamma = 1 - 1/\sqrt{2}$. Both stages solve with the same matrix $I - \gamma h Q$, by GMRES with an incomplete
+LU of it worked out once per phase (pulse on, pulse off). The step is a tenth of the shorter of `tauS` and `tauSens`,
+and a step ends exactly at $d$. After the window it keeps stepping until the molecules that could still emit are
+under $10^{-7}$ of the excitations, so the quantum yield counts the photons after the window too. Bins are read off the
+running totals with a monotone (PCHIP) interpolation, so any bin width works.
+
+Its cost is set by the $3^N$ strings: at the defaults it takes a few seconds up to $n = 7$, about 30 s at $n = 8$ and a
+few minutes at $n = 9$. The step count barely depends on `hopRatio`, which is what the implicit stepping buys. Against
+Monte Carlo with millions of molecules, the histograms agree bin by bin (chi-square) and the quantum yields agree
+within the Monte Carlo error.
 
 ### Monte Carlo: `monte_carlo`, `pulse` and `live.py`
 

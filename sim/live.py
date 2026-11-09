@@ -7,6 +7,9 @@ molecule gets one pulse from the same code as `tta_sim.py pulse`, so a live run 
 
 The simulation runs in its own process, on threads that never wait for each other. Drawing the window would hold it up
 otherwise, and so would the slower cores on a machine that has a mix of fast and slow ones.
+
+"Exact solve" works out the histogram the counts are heading for, with engine.pulse_exact, in a second process. It's
+drawn over the counts once it's done, scaled to the molecules counted so far.
 """
 
 import csv
@@ -25,7 +28,7 @@ from PyQt6 import QtCore, QtWidgets  # before pyqtgraph, so it picks this Qt and
 import numpy as np
 import pyqtgraph as pg
 
-from engine import pulse_alone, rule_arrays
+from engine import QUIET, exact_seconds, pulse_alone, pulse_exact, rule_arrays
 from plot_pulse import BASE, DPA, GRID, INK, MUTED, PERYLENE
 from rules import PULSE_DEFAULTS, build_rules, resolve
 from tta_sim import BINS_PER_LIFETIME, HERE, add_to_index, new_run_folder
@@ -60,6 +63,12 @@ SEND_S = 0.05  # how often finished batches go to the window
 FRAMES_PER_TEXT = 5  # the numbers change less often than the histogram, so they can be read
 RATE_OVER_S = 2.0  # the rates on screen are averages over this long
 EMPTY_BIN = 0.5  # where a bin with no counts sits on a log axis, which can't show 0
+EXACT_MOST_N = 9  # 3^11 strings. Beyond this the exact solve doesn't fit in memory
+EXACT_SLOW_S = 60  # an exact solve estimated to take longer than this is called slow
+EXACT_MOST_S = 600  # and one estimated longer than this isn't started
+EXACT_SLOWDOWN = 1.6  # the counting slows the exact solve this much, measured at n = 8
+EXACT_PROGRESS_S = 0.1  # how often the exact solve reports how far it's got
+PERYLENE_EXACT, DPA_EXACT = '#0b8a9b', '#163f73'  # darker versions of the two colours
 HINT = 'Hover over the histogram to read a bin.'
 STARTING = 'Starting the engine. The first run after a change to the code takes longer.'
 
@@ -149,6 +158,49 @@ def acquire(link):
             link.send((generation, molecules, excitations, np.concatenate(times), np.concatenate(sites)))
 
 
+def solve_exactly(link):
+    """An exact solve's process. Gets (key, p) to solve, sends ('progress', key, share, doing) as it goes, then
+    ('done', key, result).
+
+    It can't be interrupted, so to stop a solve the window ends the whole process and uses a spare one.
+    """
+    while True:
+        key, p = link.recv()
+        last = 0.0
+
+        def progress(share, doing):
+            nonlocal last
+            if time.perf_counter() - last > EXACT_PROGRESS_S:
+                last = time.perf_counter()
+                link.send(('progress', key, share, doing))
+
+        try:
+            link.send(('done', key, pulse_exact(build_rules(p), p, p['window'], progress)))
+        except Exception as error:  # shown in the window, which keeps running
+            link.send(('failed', key, str(error)))
+
+
+def exact_verdict(p):
+    """Whether to offer the exact solve for p, and what to say about how long it takes."""
+    n = p['n']
+    if n > EXACT_MOST_N:
+        return False, f'n = {n} is too large to solve exactly: it has {3 ** (n + 2):,} strings.'
+    seconds = exact_seconds(p, p['window']) * EXACT_SLOWDOWN
+    if seconds > EXACT_MOST_S:
+        return False, f'Too slow to solve exactly at these settings: about {how_long(seconds)}.'
+    return True, f"Takes about {how_long(seconds)}{', which is slow' if seconds > EXACT_SLOW_S else ''}."
+
+
+def how_long(seconds):
+    if seconds < 1:
+        return 'a second'
+    if seconds < 90:
+        return f'{seconds:.0f} s'
+    if seconds < 90 * 60:
+        return f'{seconds / 60:.0f} min'
+    return f'{seconds / 3600:.0f} h'
+
+
 class Measurement:
     """Everything counted for one set of parameters."""
 
@@ -195,10 +247,16 @@ class Window(QtWidgets.QMainWindow):
         self.running = False
         self.generation = 0  # batches still on their way from older parameters are ignored
         self.target = TARGET
+        self.exact_key = None  # the parameters of the exact solve that's running, done or failed, as JSON
+        self.exact = None  # its result, once it's done
+        self.exact_doing = None  # what it last said it was doing, while it's running
+        self.exact_began = None  # when it started work, from its first progress message
 
         self.link, far_end = multiprocessing.Pipe()
         self.process = multiprocessing.Process(target=acquire, args=(far_end,), daemon=True)
         self.process.start()
+        # now, so they've loaded before they're needed. The spare takes over when a solve is stopped part way
+        self.solver, self.spare = self.new_solver(), self.new_solver()
         self.build()
         self.restart()
 
@@ -216,6 +274,9 @@ class Window(QtWidgets.QMainWindow):
             QLabel[role="tile"] {{ font-size: 22px; }}
             QCheckBox::indicator {{ width: 14px; height: 14px; border: 1px solid {BASE}; border-radius: 3px; }}
             QCheckBox::indicator:checked {{ background: {INK}; }}
+            QCheckBox:disabled {{ color: {MUTED}; }}
+            QProgressBar {{ border: 1px solid {BASE}; border-radius: 3px; max-height: 6px; }}
+            QProgressBar::chunk {{ background: {INK}; }}
         """)
         panel = QtWidgets.QVBoxLayout()
         self.start_button = QtWidgets.QPushButton('Start')
@@ -244,7 +305,19 @@ class Window(QtWidgets.QMainWindow):
         self.log_box = QtWidgets.QCheckBox('Log counts axis')
         self.log_box.toggled.connect(self.log_changed)
         form.addRow('', self.log_box)
+        self.exact_box = QtWidgets.QCheckBox('Exact solve')
+        self.exact_box.toggled.connect(self.update_exact)
+        form.addRow('', self.exact_box)
         panel.addLayout(form)
+        self.exact_note = QtWidgets.QLabel()
+        self.exact_note.setProperty('role', 'caption')
+        self.exact_note.setWordWrap(True)
+        panel.addWidget(self.exact_note)
+        self.exact_bar = QtWidgets.QProgressBar()
+        self.exact_bar.setRange(0, 1000)
+        self.exact_bar.setTextVisible(False)
+        self.exact_bar.hide()
+        panel.addWidget(self.exact_bar)
 
         self.rates = QtWidgets.QLabel()
         self.rates.setProperty('role', 'caption')
@@ -256,7 +329,8 @@ class Window(QtWidgets.QMainWindow):
 
         self.tiles = {}
         tiles = QtWidgets.QHBoxLayout()
-        for caption in ('Quantum yield', 'Photons', 'Photons per s', 'Molecules', 'Molecules per s', 'Past the window'):
+        for caption in ('Quantum yield', 'Exact yield', 'Photons', 'Photons per s', 'Molecules', 'Molecules per s',
+                        'Past the window'):
             tile = QtWidgets.QVBoxLayout()
             name = QtWidgets.QLabel(caption)
             name.setProperty('role', 'caption')
@@ -281,6 +355,10 @@ class Window(QtWidgets.QMainWindow):
         self.plot.addItem(self.band, ignoreBounds=True)
         self.perylene_curve = self.plot.plot(stepMode='center', pen=pg.mkPen(PERYLENE, width=2), name='Perylene photons')
         self.dpa_curve = self.plot.plot(stepMode='center', pen=pg.mkPen(DPA, width=2), name='DPA photons')
+        # added to the plot only while they're shown, so the legend only lists them then. They don't set the axes, so
+        # the counts always fill the plot
+        self.exact_curves = [pg.PlotDataItem(pen=pg.mkPen(colour, width=2), name=name, connect='finite')
+                             for colour, name in ((PERYLENE_EXACT, 'Perylene, exact'), (DPA_EXACT, 'DPA, exact'))]
         self.cursor = pg.InfiniteLine(angle=90, pen=pg.mkPen(BASE))
         self.cursor.hide()
         self.plot.addItem(self.cursor, ignoreBounds=True)
@@ -317,6 +395,89 @@ class Window(QtWidgets.QMainWindow):
         self.bin_box.blockSignals(False)
         self.recent.clear()
         self.last_drawn = None
+        self.update_exact()
+
+    def update_exact(self):
+        """Start the exact solve for the current values if it's wanted and not already running or done."""
+        p = self.measurement.p
+        allowed, verdict = exact_verdict(p)
+        self.exact_box.setEnabled(allowed)
+        key = json.dumps(p, sort_keys=True)
+        if not (allowed and self.exact_box.isChecked()):
+            if self.exact_doing:  # stop it, so it doesn't take time from the counting
+                self.stop_solve()
+                self.exact_key = None
+            self.exact_note.setText(verdict)
+            self.exact_bar.hide()
+        elif key != self.exact_key:
+            if self.exact_doing:
+                self.stop_solve()
+            self.solver[1].send((key, p))
+            self.exact_key, self.exact, self.exact_doing, self.exact_began = key, None, 'Starting', None
+            self.exact_note.setText(f'Starting. {verdict}')
+            self.exact_bar.setValue(0)
+            self.exact_bar.show()
+        elif self.exact is not None:
+            self.exact_note.setText('Exact solve done.')
+        self.show_exact_curves()
+
+    @staticmethod
+    def new_solver():
+        """A loaded, waiting exact solve process, as (process, link)."""
+        link, far_end = multiprocessing.Pipe()
+        process = multiprocessing.Process(target=solve_exactly, args=(far_end,), daemon=True)
+        # one BLAS thread: more only compete with the simulation's threads, and the solve was slower for it
+        threads = os.environ.get('OPENBLAS_NUM_THREADS')
+        os.environ['OPENBLAS_NUM_THREADS'] = '1'
+        process.start()
+        if threads is None:
+            del os.environ['OPENBLAS_NUM_THREADS']
+        else:
+            os.environ['OPENBLAS_NUM_THREADS'] = threads
+        return process, link
+
+    def stop_solve(self):
+        """End the running solve's process at once, and switch to the spare, which has already loaded."""
+        self.solver[0].terminate()
+        self.solver, self.spare = self.spare, self.new_solver()
+        self.exact_doing = None
+
+    def exact_shown(self):
+        return self.exact is not None and self.exact_box.isChecked() and self.exact_key == json.dumps(
+            self.measurement.p, sort_keys=True)
+
+    def show_exact_curves(self):
+        for curve in self.exact_curves:
+            if self.exact_shown() and curve not in self.plot.listDataItems():
+                self.plot.addItem(curve, ignoreBounds=True)
+            elif not self.exact_shown() and curve in self.plot.listDataItems():
+                self.plot.removeItem(curve)
+        self.last_drawn = None
+
+    def read_exact(self):
+        """Take in what the exact solve has sent: how far it's got, or its result."""
+        while self.solver[1].poll():
+            kind, key, *rest = self.solver[1].recv()
+            if key != self.exact_key:  # from a solve that was dropped
+                continue
+            now = time.perf_counter()
+            self.exact_began = self.exact_began or now
+            spent = now - self.exact_began
+            if kind == 'progress':
+                share, self.exact_doing = rest
+                left = spent / share * (1 - share) if share > 0.05 else None
+                self.exact_bar.setValue(int(share * 1000))
+                self.exact_note.setText(self.exact_doing + (f', about {how_long(left)} left.' if left else '.'))
+                continue
+            self.exact_doing = None
+            self.exact_bar.hide()
+            if kind == 'done':
+                self.exact = rest[0]
+                self.exact_note.setText(f'Exact solve done in {how_long(spent)}.')
+                self.show_exact_curves()
+                self.show_numbers()
+            else:
+                self.exact_note.setText(f'The exact solve failed: {rest[0]}')
 
     def field_changed(self, name):
         box = self.boxes[name]
@@ -362,6 +523,7 @@ class Window(QtWidgets.QMainWindow):
             generation, *batch = self.link.recv()
             if generation == self.generation:
                 self.measurement.add(*batch)
+        self.read_exact()
         totals = self.measurement.totals
         molecules, photons = totals['molecules'], totals['photons']
         if self.running:
@@ -386,7 +548,14 @@ class Window(QtWidgets.QMainWindow):
         floor = EMPTY_BIN if self.log_box.isChecked() else 0
         self.perylene_curve.setData(edges, np.maximum(perylene, floor))
         self.dpa_curve.setData(edges, np.maximum(dpa, floor))
-        self.drawn = edges, perylene, dpa
+        expected = None
+        if self.exact_shown():
+            # photons the exact solve expects in each bin from the molecules counted so far, drawn at the bin centres
+            expected = [share * self.measurement.totals['molecules'] for share in self.exact.binned(edges)]
+            centres = (edges[:-1] + edges[1:]) / 2
+            for curve, counts in zip(self.exact_curves, expected):
+                curve.setData(centres, np.where(counts > 0, counts, np.nan) if self.log_box.isChecked() else counts)
+        self.drawn = edges, perylene, dpa, expected
         if self.hovered is not None:
             self.show_bin(self.hovered)
 
@@ -400,6 +569,11 @@ class Window(QtWidgets.QMainWindow):
         tiles['Past the window'] = f"{totals['past_window'] / photons:.1%}" if photons else '0'
         if totals['excitations']:
             tiles['Quantum yield'] = f"{photons / totals['excitations']:.2%} ± {photons ** 0.5 / totals['excitations']:.2%}"
+        tiles['Exact yield'] = '–'
+        if self.exact_shown() and np.isfinite(self.exact.excitations):
+            # at least, if it stopped counting after the window while some molecules could still emit
+            unfinished = self.exact.still_active >= QUIET * self.exact.excitations
+            tiles['Exact yield'] = f"{'≥ ' if unfinished else ''}{self.exact.photons / self.exact.excitations:.2%}"
         for caption, text in tiles.items():
             self.tiles[caption].setText(text)
 
@@ -424,11 +598,12 @@ class Window(QtWidgets.QMainWindow):
     def show_bin(self, t):
         if not hasattr(self, 'drawn'):
             return
-        edges, perylene, dpa = self.drawn
+        edges, perylene, dpa, expected = self.drawn
         k = np.searchsorted(edges, t, side='right') - 1
         if 0 <= k < perylene.size:
-            self.status.setText(f'{edges[k]:.4g} to {edges[k + 1]:.4g} s: {perylene[k]:,} perylene photons, '
-                                f'{dpa[k]:,} DPA photons')
+            exact = [f' (exact {counts[k]:,.1f})' for counts in expected] if expected else ['', '']
+            self.status.setText(f'{edges[k]:.4g} to {edges[k + 1]:.4g} s: {perylene[k]:,} perylene photons{exact[0]}, '
+                                f'{dpa[k]:,} DPA photons{exact[1]}')
 
     def save(self):
         """Write the histogram as it stands, in the same columns as a pulse run, plus a picture of it."""
@@ -446,15 +621,21 @@ class Window(QtWidgets.QMainWindow):
         width = np.diff(edges)
         scale = 1 / (totals['molecules'] * width)
         total = perylene + dpa
+        # the exact solve's columns, if it's shown: the photons it expects in each bin from this many molecules
+        exact = self.exact.binned(edges) if self.exact_shown() else None
         with (folder / 'histogram.csv').open('w', newline='') as out:
             writer = csv.writer(out)
             writer.writerow(['point', 'bin_start_s', 'bin_end_s', 'pulse_on', 'photons', 'perylene_photons', 'dpa_photons',
-                             'photons_per_molecule_per_s', 'error'])
+                             'photons_per_molecule_per_s', 'error']
+                            + (['exact_perylene_photons', 'exact_dpa_photons'] if exact else []))
             for k in range(total.size):
                 writer.writerow([0, edges[k], edges[k + 1], int(edges[k] < m.p['duration']), total[k], perylene[k], dpa[k],
-                                 total[k] * scale[k], total[k] ** 0.5 * scale[k]])
+                                 total[k] * scale[k], total[k] ** 0.5 * scale[k]]
+                                + ([share[k] * totals['molecules'] for share in exact] if exact else []))
         with (folder / 'summary.csv').open('w', newline='') as out:
             row = {**m.p, **totals, 'photons_per_excitation': totals['photons'] / max(totals['excitations'], 1)}
+            if exact:
+                row['exact_photons_per_excitation'] = self.exact.photons / self.exact.excitations
             writer = csv.DictWriter(out, row.keys())
             writer.writeheader()
             writer.writerow(row)
@@ -466,6 +647,8 @@ class Window(QtWidgets.QMainWindow):
         self.link.send({'close': True})
         self.process.join(2)
         self.process.terminate()  # only matters if it was stuck sending a batch nobody will read
+        self.solver[0].terminate()
+        self.spare[0].terminate()
         event.accept()
 
 
