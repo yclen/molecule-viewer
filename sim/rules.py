@@ -3,7 +3,9 @@
 The system is a string of n + 2 letters, one per site: the sensitizer (site 0), DPA 1 to n (sites 1 to n) and the
 perylene (site n + 1). Each letter is G (ground), T (triplet) or S (singlet).
 
-A rule rewrites one site, or two sites, at a rate per second. There is no time step: the engine adds up the rates of
+Times are in ns and rates per ns.
+
+A rule rewrites one site, or two sites, at a rate per ns. There is no time step: the engine adds up the rates of
 every rule that can fire, waits a random time, and fires one of them (see engine.py).
 """
 
@@ -18,24 +20,30 @@ LETTERS = 'GTS'
 
 DEFAULTS = {
     'n': 8,  # DPA mediators
-    'tauS': 5.0,  # singlet lifetime on a DPA or the perylene, s
-    'tauSens': 5.0,  # sensitizer singlet decay lifetime, s (rule 9), not counting ISC
+    'tauS': 5.0,  # singlet lifetime on a DPA or the perylene, ns
+    'tauSens': 5.0,  # sensitizer singlet decay lifetime, ns (rule 9), not counting ISC
     'tripletYield': 0.5,  # share of sensitizer singlets that become triplets. This sets kISC
     'hopRatio': 100.0,  # how many times faster hopping is than the singlet lifetime: kHop = hopRatio / tauS
     'excRatio': 0.1,  # excitation rate as a multiple of the sensitizer's lifetime: kExc = excRatio / tauSens
-    'kDecay': 1e-6,  # triplet decay on a DPA or the perylene, /s
+    'kDecay': 1e-6,  # triplet decay on a DPA or the perylene, /ns
     'f': 0.4,  # the F factor (spin-statistical factor): the share of TTA events that make a singlet
     'fretRadius': 4.0,  # nm: the distance from the sensitizer where back transfer is 50% (0 = no back transfer)
     'spacing': 0.0,  # nm: 0 = distances measured from the real molecule; above 0 = site i sits at i * spacing
-    'block': 1,  # 1 = a triplet can't hop onto a singlet. 0 = it lands and quenches it (only to compare with the app)
+    'block': 1,  # 1 = a triplet can't hop onto a singlet. 0 = it lands and quenches it (for comparison only)
     # normally worked out by resolve(). Giving one of these sets it directly, and the yield or ratio follows from it
-    'kISC': None,  # sensitizer S -> T, /s
-    'kHop': None,  # triplet hops per second, both directions together, /s
-    'kExc': None,  # sensitizer excitations per second, /s
+    'kISC': None,  # sensitizer S -> T, /ns
+    'kHop': None,  # triplet hops per ns, both directions together, /ns
+    'kExc': None,  # sensitizer excitations per ns, /ns
 }
 
 # a pulse run: kExc is on from t = 0 to `duration`, then 0
 PULSE_DEFAULTS = {**DEFAULTS, 'excRatio': 1.0, 'duration': 5.0}
+
+# the fluorescence reference in live.py: a plain fluorophore with two states, G and S, on one site. No triplets, no hops
+FLUORESCENCE_DEFAULTS = {
+    'tauFl': 5.0,  # singlet lifetime, ns: S -> G at 1/tauFl in all
+    'fluorYield': 1.0,  # share of those S -> G that give a photon. The rest are lost without one
+}
 
 
 def resolve(p):
@@ -146,4 +154,16 @@ def build_rules(p):
         two(a, b, 'T T', 'G S', p['f'] * rate, 'tta_singlet', b)  # rule 7
         two(a, b, 'T T', 'G T', (1 - p['f']) * rate, 'tta_failed', b)  # rule 8: one triplet survives, on site b
 
+    return [rule for rule in rules if rule[6] > 0]
+
+
+def fluorescence_rules(p):
+    """A two-state fluorophore on site 0, in the same form as build_rules: excited at kExc, and back to G at 1/tauFl,
+    as a photon with chance fluorYield. p needs kExc, tauFl and fluorYield.
+    """
+    G, S = LETTERS.index('G'), LETTERS.index('S')
+    decay = 1 / p['tauFl']
+    rules = [(0, -1, G, 0, S, 0, p['kExc'], EVENTS.index('excitation'), 0),
+             (0, -1, S, 0, G, 0, decay * p['fluorYield'], EVENTS.index('photon'), 0),
+             (0, -1, S, 0, G, 0, decay * (1 - p['fluorYield']), EVENTS.index('sens_singlet_lost'), 0)]
     return [rule for rule in rules if rule[6] > 0]

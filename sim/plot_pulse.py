@@ -27,8 +27,8 @@ def load(folder):
     points = []
     for summary in summaries:
         rows = [row for row in bins if row['point'] == summary['point']]
-        start = np.array([float(row['bin_start_s']) for row in rows])
-        end = np.array([float(row['bin_end_s']) for row in rows])
+        start = np.array([float(row.get('bin_start_ns', row.get('bin_start_s'))) for row in rows])
+        end = np.array([float(row.get('bin_end_ns', row.get('bin_end_s'))) for row in rows])
         scale = 1 / (int(summary['molecules']) * (end - start))
         points.append((summary, {
             'time': (start + end) / 2,
@@ -45,13 +45,13 @@ def quantum_yield(summary):
 
 def settings_text(summary, width, leave_out=()):
     parts = {
-        'kHop': f"kHop = {float(summary['kHop']):.3g} /s",
+        'kHop': f"kHop = {float(summary['kHop']):.3g} /ns",
         'n': f"n = {summary['n']}",
-        'kExc': f"kExc = {float(summary['kExc']):.3g} /s",
-        'duration': f"pulse = {float(summary['duration']):g} s",
+        'kExc': f"kExc = {float(summary['kExc']):.3g} /ns",
+        'duration': f"pulse = {float(summary['duration']):g} ns",
     }
     text = [value for name, value in parts.items() if name not in leave_out]
-    return ', '.join(text + [f"{int(summary['molecules']):,} molecules", f'{width:g} s bins'])
+    return ', '.join(text + [f"{int(summary['molecules']):,} molecules", f'{width:g} ns bins'])
 
 
 def time_limit(summary, h):
@@ -80,7 +80,7 @@ def draw(ax, summary, h, xmax, ymax):
     ax.plot(h['time'], h['perylene'], color=PERYLENE, lw=2, ls=(0, (5, 2.5)), label='Perylene photons')
     ax.set_xlim(0, xmax)
     ax.set_ylim(0, ymax)
-    ax.set_xlabel('Time after pulse starts (s)', color=MUTED)
+    ax.set_xlabel('Time after pulse starts (ns)', color=MUTED)
     ax.grid(axis='y', color=GRID, lw=1)
     ax.set_axisbelow(True)
     for side in ('top', 'right', 'left'):
@@ -94,7 +94,7 @@ def peak(points):
 
 
 def plot_run(folder, limit=None):
-    """Draw every figure. `limit` sets the end of the time axis in seconds."""
+    """Draw every figure. `limit` sets the end of the time axis in ns."""
     points, swept = load(folder)
     out = folder / 'plots'
     out.mkdir(exist_ok=True)
@@ -104,7 +104,7 @@ def plot_run(folder, limit=None):
         xmax = limit or time_limit(summary, h)
         draw(ax, summary, h, xmax, peak([(summary, h)]))
         note_share_past(ax, h, xmax)
-        ax.set_ylabel('Photons per molecule per second', color=MUTED)
+        ax.set_ylabel('Photons per molecule per ns', color=MUTED)
         ax.legend(frameon=False, labelcolor=INK, loc='upper right')
         fig.suptitle(f'Quantum yield {quantum_yield(summary)} (photons emitted / photons absorbed)', x=0.07, ha='left',
                      color=INK, fontsize=13)
@@ -122,9 +122,9 @@ def plot_run(folder, limit=None):
             draw(ax, summary, h, xmax, ymax)
             note_share_past(ax, h, xmax)
             shown = [f"{name} = {float(summary[name]):g}" for name in swept if name != 'kHop']
-            ax.set_title('\n'.join([f"kHop = {float(summary['kHop']):.3g} /s", *shown,
+            ax.set_title('\n'.join([f"kHop = {float(summary['kHop']):.3g} /ns", *shown,
                                     f'Quantum yield {quantum_yield(summary)}']), color=INK, fontsize=12, loc='left')
-        axes[0].set_ylabel('Photons per molecule per second', color=MUTED)
+        axes[0].set_ylabel('Photons per molecule per ns', color=MUTED)
         axes[-1].legend(frameon=False, labelcolor=INK, loc='upper right')
         summary, h = points[0]
         fig.suptitle(settings_text(summary, h['width'], ['kHop', *swept]), x=0.01, ha='left', color=MUTED, fontsize=10)

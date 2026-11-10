@@ -2,7 +2,7 @@
 
 This is the model behind `rules.py` and `engine.py` written as equations: what a state is, the 10 rules, how the rules
 become one matrix acting on a vector of probabilities, and how the three ways of running it (Monte Carlo, exact, pulse)
-use that matrix. Simulated time is in seconds, which can stand for nanoseconds throughout.
+use that matrix. Simulated time is in nanoseconds throughout, and rates are per ns.
 
 ---
 
@@ -53,16 +53,17 @@ A pulse run starts with every molecule in all $G$, which is $\mathbf{P}(0) = (1,
 
 ## 2. Parameters and rates
 
-The inputs are lifetimes and ratios. The rates the rules use are worked out from them (`resolve` in `rules.py`):
+The inputs are lifetimes (ns) and ratios. The rates the rules use are worked out from them (`resolve` in `rules.py`),
+unless `kHop` or `kExc` is given directly, as the live window does:
 
 | Rate | Formula | Default |
 |---|---|---|
-| Excitation | $k_\text{exc} = \text{excRatio} / \tau_\text{sens}$ | $0.1 / 5 = 0.02\ \text{s}^{-1}$ (pulse runs: $1/5 = 0.2$) |
-| Intersystem crossing | $k_\text{ISC} = \dfrac{1}{\tau_\text{sens}} \cdot \dfrac{Y}{1 - Y}$, with $Y$ = tripletYield | $0.2 \cdot 0.5/0.5 = 0.2\ \text{s}^{-1}$ |
-| Sensitizer singlet decay | $1 / \tau_\text{sens}$ | $0.2\ \text{s}^{-1}$ |
-| Hopping | $k_\text{hop} = \text{hopRatio} / \tau_S$ | $100 / 5 = 20\ \text{s}^{-1}$ |
-| Singlet emission (DPA, perylene) | $1 / \tau_S$ | $0.2\ \text{s}^{-1}$ |
-| Triplet decay (DPA, perylene) | $k_\text{decay}$ | $10^{-6}\ \text{s}^{-1}$ |
+| Excitation | $k_\text{exc} = \text{excRatio} / \tau_\text{sens}$ | $0.1 / 5 = 0.02\ \text{ns}^{-1}$ (pulse runs: $1/5 = 0.2$) |
+| Intersystem crossing | $k_\text{ISC} = \dfrac{1}{\tau_\text{sens}} \cdot \dfrac{Y}{1 - Y}$, with $Y$ = tripletYield | $0.2 \cdot 0.5/0.5 = 0.2\ \text{ns}^{-1}$ |
+| Sensitizer singlet decay | $1 / \tau_\text{sens}$ | $0.2\ \text{ns}^{-1}$ |
+| Hopping | $k_\text{hop} = \text{hopRatio} / \tau_S$ | $100 / 5 = 20\ \text{ns}^{-1}$ |
+| Singlet emission (DPA, perylene) | $1 / \tau_S$ | $0.2\ \text{ns}^{-1}$ |
+| Triplet decay (DPA, perylene) | $k_\text{decay}$ | $10^{-6}\ \text{ns}^{-1}$ |
 | Spin factor | $f$ (share of TTA events that make a singlet) | $0.4$ |
 
 The ISC formula comes from ISC and singlet decay competing on the sensitizer: the share of its singlets that become
@@ -125,7 +126,7 @@ Notes on the rules:
   sensitizer is in $S$ or $T$ it can't accept the energy, so FRET is off and the singlet always emits. In the code,
   rule 4 is therefore written as a two-site rule on $(0, i)$ that checks the sensitizer's letter.
 - **Rule 6 is the absence of a rule.** There's simply no $T\,S$ rewrite, so a triplet next to a singlet waits. (With
-  `block = 0` there is one, $T\,S \to G\,T$ at $h_{a \to b}$, which is only there to compare with the app.)
+  `block = 0` there is one, $T\,S \to G\,T$ at $h_{a \to b}$, which is only there for comparison.)
 - **Rules 7 and 8 together** fire at the hop rate, $f\,h + (1-f)\,h = h$: a triplet meeting a triplet always
   annihilates. A failed TTA leaves one triplet, on the landing site $b$.
 - **The sensitizer's triplet doesn't decay.** It can only leave by hopping (rule 5) or by TTA with DPA 1 (rules 7, 8).
@@ -326,8 +327,8 @@ P(\text{rule fires within } \Delta t \text{, alone}) = 1 - e^{-k \Delta t}.
 $$
 
 A fixed-step simulation only works when $R(x)\, dt \ll 1$ for the *total* rate, not just for the one rule, or two
-events land in the same step. The fastest rule is hopping at $20\ \text{s}^{-1}$, so $dt$ would have to be well under
-$0.05$ s. The Gillespie method in section 5 is the $dt \to 0$ limit of this picture, so it avoids that error and also
+events land in the same step. The fastest rule is hopping at $20\ \text{ns}^{-1}$, so $dt$ would have to be well under
+$0.05$ ns. The Gillespie method in section 5 is the $dt \to 0$ limit of this picture, so it avoids that error and also
 skips the empty steps.
 
 ---

@@ -3,7 +3,7 @@
 A standalone, data-only version of the TTA cascade. The app doesn't use anything in this folder.
 
 The system is a string of `n + 2` letters, one per site: the sensitizer, DPA 1 to `n`, then the perylene. Each letter
-is `G`, `T` or `S`. Rules rewrite one or two sites at a rate per second, and there is no time step: the engine adds up
+is `G`, `T` or `S`. Rules rewrite one or two sites at a rate per ns, and there is no time step: the engine adds up
 the rates of every rule that can fire, waits a random time, and fires one (the Gillespie method).
 
 Needs Python with `numpy`, `scipy` and `numba`. The first run compiles for a few seconds.
@@ -78,23 +78,24 @@ for example `--excRatio 0.1,1,10 --duration 1:10:4`. `rebin` takes `--bin`, or `
 
 ## Parameters
 
-The units are arbitrary, because only the ratios between rates matter. Everything is in seconds here, but a second can
-stand for a nanosecond. Hopping and excitation are set relative to the singlet lifetime:
+Times are in ns and rates per ns, everywhere: the commands, the saved files and the live window. Only the wall-clock
+figures (`wall_s`, `events_per_wall_s`, the `seconds` column of `index.csv`) are real seconds. On the command line,
+hopping and excitation can be set relative to the singlet lifetime, or directly with `--kHop` and `--kExc`:
 
 | Name | Default | Meaning |
 |---|---|---|
 | `n` | 8 | DPA mediators |
-| `tauS` | 5 s | singlet lifetime on a DPA or the perylene |
-| `tauSens` | 5 s | sensitizer singlet decay lifetime (rule 9), not counting ISC (`inf` = never decays) |
+| `tauS` | 5 ns | singlet lifetime on a DPA or the perylene |
+| `tauSens` | 5 ns | sensitizer singlet decay lifetime (rule 9), not counting ISC (`inf` = never decays) |
 | `tripletYield` | 0.5 | share of sensitizer singlets that become triplets; sets `kISC` |
 | `hopRatio` | 100 | how many times faster hopping is than the singlet lifetime: `kHop = hopRatio / tauS` |
 | `excRatio` | 0.1 (1 in a pulse) | excitation rate relative to the sensitizer's lifetime: `kExc = excRatio / tauSens` |
-| `kDecay` | 1e-6 /s | triplet decay on a DPA or the perylene |
+| `kDecay` | 1e-6 /ns | triplet decay on a DPA or the perylene |
 | `f` | 0.4 | the F factor: the share of TTA events that make a singlet |
 | `fretRadius` | 4 nm | distance where back transfer is 50% (0 = no back transfer) |
 | `spacing` | 0 | 0 = distances measured from the real molecule; above 0 = site `i` sits at `i × spacing` nm |
-| `block` | 1 | 1 = a triplet can't hop onto a singlet; 0 = it lands and quenches it (only to compare with the app) |
-| `duration` | 5 s | pulse runs only: how long `kExc` stays on |
+| `block` | 1 | 1 = a triplet can't hop onto a singlet; 0 = it lands and quenches it (for comparison only) |
+| `duration` | 5 ns | pulse runs only: how long `kExc` stays on |
 
 `kISC`, `kHop` and `kExc` are worked out from these and saved with the results. ISC and rule 9 compete, so
 `tripletYield = kISC / (kISC + 1/tauSens)`, which gives `kISC = (1/tauSens) × tripletYield / (1 − tripletYield)`. At 50%
@@ -104,7 +105,8 @@ Giving `--kISC`, `--kHop` or `--kExc` sets that rate directly, and the yield or 
 
 ## Rules
 
-Two-letter rules read as hopping site, then receiving site. `formulas.md` has the same rules as equations.
+Two-letter rules read as hopping site, then receiving site. `formulas.md` has the same rules as equations, and the
+app's TTA cascade script (`samples/sims/3-tta-cascade.js`) follows the same rules on one molecule.
 
 | # | Rule | Where | Change | Rate | Counted as |
 |---|---|---|---|---|---|
@@ -133,6 +135,9 @@ from the sensitizer and each further DPA adds 1.32 nm.
 
 Each run gets its own folder in `sim/data/` (not tracked by git), and `sim/data/index.csv` lists them all.
 
+Runs saved before the switch to ns (up to 2026-11-10) have the same numbers under `_s` names, such as `bin_start_s`.
+`plot` and `rebin` still read them, and a rebinned file gets the new `_ns` names.
+
 ```text
 sim/data/
   index.csv                   one line per run
@@ -155,19 +160,19 @@ sim/data/
 | `triplets_made`, `triplets_decayed` | triplets from ISC, and triplets lost to rule 3 |
 | `tta_singlet_perylene`, `tta_singlet_dpa` | TTA events that made a singlet |
 | `tta_failed_perylene`, `tta_failed_dpa` | TTA events that didn't |
-| `excitations_per_s`, `photons_per_s` | rates in sim seconds |
+| `excitations_per_ns`, `photons_per_ns` | rates per simulated ns |
 | `mean_triplets_present`, `mean_singlets_present` | average number on the molecule at once |
-| `time_to_photon_s` | average time from excitation to photon. After TTA the clock follows the younger triplet |
+| `time_to_photon_ns` | average time from excitation to photon. After TTA the clock follows the younger triplet |
 | `triplet_balance`, `singlet_balance` | bookkeeping checks, should be 1 |
 | `wall_s` | real seconds this point took to simulate |
 | `events`, `events_per_wall_s` | rules fired after warmup, and how many per real second |
-| `sim_seconds` | simulated seconds covered, added up across replicas |
+| `sim_ns` | simulated ns covered, added up across replicas |
 
 The whole run's time is printed at the end and saved in the `seconds` column of `index.csv`.
 
 Excitations mean rule 1 only: a back transfer doesn't count as a new one. `isc_yield` and `triplets_made` do include
 singlets recycled through back transfer, so `triplets_made` can be above `isc_yield`. `exact` leaves `_se` and
-`time_to_photon_s` empty.
+`time_to_photon_ns` empty.
 
 ## Pulse runs
 
@@ -198,19 +203,19 @@ as `histogram_bin0.01.csv` and leaves `histogram.csv` as it is.
 | `histogram.csv` column | Meaning |
 |---|---|
 | `point` | which setting |
-| `bin_start_s`, `bin_end_s` | the bin, in seconds after the pulse starts |
+| `bin_start_ns`, `bin_end_ns` | the bin, in ns after the pulse starts |
 | `pulse_on` | 1 if the bin starts during the pulse |
 | `photons`, `perylene_photons`, `dpa_photons` | counts in the bin |
-| `photons_per_molecule_per_s` | the count scaled so it doesn't depend on bin width or molecule count |
+| `photons_per_molecule_per_ns` | the count scaled so it doesn't depend on bin width or molecule count |
 | `error` | the counting error on that scaled value, from the square root of the count |
 
 | `summary.csv` column | Meaning |
 |---|---|
 | `excitations_per_molecule`, `photons_per_molecule` | averages over all molecules |
 | `share_of_molecules_with_a_photon`, `share_of_photons_after_pulse` | fractions from 0 to 1 |
-| `peak_bin_start_s` | start of the busiest bin |
-| `mean_emission_s`, `median_emission_s`, `last_photon_s` | emission times after the pulse starts |
-| `time_to_photon_s` | average time from the younger triplet's excitation to the photon |
+| `peak_bin_start_ns` | start of the busiest bin |
+| `mean_emission_ns`, `median_emission_ns`, `last_photon_ns` | emission times after the pulse starts |
+| `time_to_photon_ns` | average time from the younger triplet's excitation to the photon |
 | `wall_s`, `events`, `events_per_wall_s` | real seconds, rules fired, and rules fired per real second |
 
 `summary.csv` also has the parameters and the per-excitation columns from `results.csv`, such as
@@ -236,27 +241,71 @@ A pulse run you can watch. Fresh molecules are flashed continuously, and each ph
 counted, so it builds up like a time-resolved measurement. It's the same simulation as `pulse`: every molecule starts in
 all `G`, gets one pulse and is followed until it's back in all `G`, so nothing carries over from one pulse to the next.
 
-- **Start / Stop:** Stop pauses and keeps the counts. **Clear** empties the histogram.
-- **Parameters:** type a value and press Enter or Tab. Any change to these clears the histogram, so it never mixes two
-  experiments.
+**Everything in the window is in nanoseconds**, like the rest of the simulation. Only the wall-clock figures (molecules
+per s, how long a solve takes) are real seconds. There are no ratios: `kHop` and `kExc` are both set directly.
+
+The controls are laid out like an instrument, with the ones you change most at the top:
+
+- **Laser:** START / STOP (or F5). Stop pauses and keeps the counts, and the count rate and molecules per s
+  stay at their last values, marked "held". The slider sets **`kExc`** directly, in /ns, on a
+  log scale from 0.0001 to 100 /ns. `kExc` is proportional to laser power, so this is the power knob. There are ÷10, ÷2,
+  ×2 and ×10 buttons, or type a value. Dragging the slider only clears the histogram when you let go. **Pulse length**
+  is here too.
+
+  Under the slider is the **laser power** that gives this `kExc` at the centre of the beam, `P = kExc / (kExc per mW)`,
+  with `kExc per mW = σ I0 / hν` for 1 mW: the absorption cross-section `σ = ln(10) · 1000 · ε / N_A` and the peak
+  intensity of a Gaussian beam `I0 = 2P / (π w0²)`. The assumed setup is listed under it, and set at the top of
+  `live.py`: beam radius `w0 = 1 µm` (1/e² of the intensity), `ε = 50,000 /M/cm` and 635 nm, which gives 0.0389 /ns per
+  mW. So the default `kExc = 0.2 /ns` is about 5.1 mW. The power is only shown: the simulation runs on `kExc`.
+- **Acquisition:** time window, bin width, throughput, log counts, the exact overlay, Clear and Save (or Ctrl+S).
+- **Sample**, folded away with a one-line summary. **TTA | FLUORESCENCE** under its title picks what's in the beam, and
+  stays in view when the panel is folded, so you can flip between the two traces with one click:
+  - **TTA**: `n`, `kHop`, `f`, triplet yield, `τS`, `τSens`, `kDecay` and the FRET radius. Below them are the rates that
+    follow: `kISC` and the hop time.
+  - **Fluorescence**: a plain two-state fluorophore, `G` and `S`, on one site, to compare with (`fluorescence_rules` in
+    `rules.py`). It's excited at `kExc` while the pulse is on and goes back to `G` at `1/τF`, giving a photon with chance
+    `Φ_F` (default 1, so its quantum yield is `Φ_F`). Its trace is violet. Below the values is the saturation,
+    `kExc / (kExc + 1/τF)`: the share a steady light would keep in `S`.
+
+  Switching sample keeps the laser, pulse and time window, and starts a new histogram.
+- **Readouts** along the top: the quantum yield with its counting error (and the exact solve's yield next to it when
+  the overlay is on), the **count rate** in photons per real second, photons counted, molecules flashed with how many per
+  second, and photons absorbed per molecule. The header has the acquisition clock (real time spent running since the
+  last clear), the laser lamp and the exact solve's lamp.
+
+The defaults are the old pulse defaults in flat units: `τS = τSens = 5 ns`, `kHop = 20 /ns`, `kExc = 0.2 /ns`, a 5 ns
+pulse and a 50 ns window.
+
+- **Parameters:** type a value and press Enter or Tab. Any change to the laser, pulse or sample clears the histogram, so
+  it never mixes two experiments. Bin width, the log axis and throughput don't.
 - **Time window:** photons arriving after it aren't in the histogram, but they do count towards the total and the quantum
-  yield. "Past the window" shows their share. Make the window longer if that gets large.
-- **Molecules per s:** the rate to aim for, default 100,000. 0 means as fast as the machine can go. "Molecules per s" at the
-  top is the rate actually reached, averaged over 2 s.
-- **Bin width, log axis:** these change only the view, so the counts stay. Bins are multiples of `tauS / 100`.
-- **Exact solve:** works out the histogram the counts are heading for, with no random noise, while they pile up. It
-  runs in its own process, with a progress bar and a time left, and when it's done it's drawn over the counts in darker
-  colours, scaled to the molecules counted so far. "Exact yield" is its quantum yield, photons after the window
-  included. Below the checkbox is how long it should take at the current values. Above `n = 9`, or when it would take
-  over 10 minutes, it isn't offered and says why. Changing a value starts a new solve; Clear, the bin width and the log
-  axis don't. `formulas.md` has how it works.
+  yield. Once 1% or more of the photons land after it, the Photons readout says so in amber. Make the window longer then.
+- **Throughput:** molecules to aim for per real second, default 100,000. 0 means as fast as the machine can go. The rate
+  actually reached is under "Molecules", averaged over 2 s.
+- **Bin width, log axis:** these change only the view, so the counts stay. Bins are multiples of `τS / 100`.
+- **Exact overlay:** works out the histogram the counts are heading for, with no random noise, while they pile up. It
+  runs in its own process, with a progress bar and a time left, and when it's done it's drawn over the counts as dashed
+  lines, scaled to the molecules counted so far. Its quantum yield, photons after the window included, appears under
+  the counted one.
+  Below the checkbox is how long it should take at the current values. Above `n = 9`, or when it would take over 10
+  minutes, it isn't offered and says why. Changing a value starts a new solve; Clear, the bin width and the log axis
+  don't. `formulas.md` has how it works. For the fluorophore it's instant, from the closed form
+  (`FluorescenceExact` in `engine.py`).
 - **Hover** over the histogram to read a bin, with what the exact solve expects there when it's shown. Drag and scroll to
-  look along the time axis, and the small "A" in the corner of the plot resets the view.
-- **Save** writes `histogram.csv` (the same columns as a pulse run), `summary.csv`, `params.json`, `rules.py` and
-  `histogram.png` to a new `sim/data/YYYY-MM-DD_live/` folder. It holds the histogram at the current bin width, not each
-  photon, so `rebin` and `plot` don't work on it. With the exact solve shown, `histogram.csv` also has
-  `exact_perylene_photons` and `exact_dpa_photons` (the photons it expects in each bin from the molecules counted) and
-  `summary.csv` has `exact_photons_per_excitation`.
+  look along the time axis. Clicking a legend entry hides that curve, and clicking it again brings it back.
+- **↕ AUTO Y** (on by default) keeps the counts axis fitted to every curve that's shown in the time range in view,
+  the exact overlay included and hidden curves left out. Turn it off to zoom and pan the counts axis yourself (scroll
+  over the axis to zoom only that axis). **⌂ HOME** (or the Home key) goes back to the whole time window with AUTO Y on.
+- The exact overlay grows as the counts do, because it's drawn as the photons expected from the molecules counted so
+  far. Its shape is fixed once the solve is done.
+- **Save** writes `histogram.csv`, `summary.csv`, `params.json`, `rules.py` and `histogram.png` to a new
+  `sim/data/YYYY-MM-DD_live/` folder. The columns are a pulse run's, in ns: `bin_start_ns`, `bin_end_ns` and
+  `photons_per_molecule_per_ns`. It holds
+  the histogram at the current bin width, not each photon, so `rebin` and `plot` don't work on it. With the exact solve
+  shown, `histogram.csv` also has `exact_perylene_photons` and `exact_dpa_photons` (the photons it expects in each bin
+  from the molecules counted) and `summary.csv` has `exact_photons_per_excitation`. A fluorescence run goes to a
+  `YYYY-MM-DD_live-fluorescence/` folder, with `fluorescence_photons` (and `exact_fluorescence_photons`) in place of the
+  perylene and DPA columns, and `sample` in its parameters says which it was.
 
 The ± on the quantum yield is the counting error: the square root of the photons, over the excitations.
 
@@ -265,6 +314,6 @@ development machine, with counting running alongside: a few seconds up to `n = 7
 minutes at `n = 9`. Hopping speed barely matters. A pulse longer than the time window gives no exact yield, because
 the solve stops at the window.
 
-Speed depends on how many excitations each molecule gets. With 5 s pulses on the development machine, 100,000 molecules per
-second held at `excRatio` 1 and 10, and flat out it reached about 160,000 at `excRatio` 10. Long, bright pulses are far
-slower: a 500 s pulse at `excRatio` 30 runs about 1,200 molecules per second, though each gives about 25 photons.
+Speed depends on how many excitations each molecule gets. With 5 ns pulses on the development machine, 100,000 molecules
+per second held at `kExc` 0.2 and 2 /ns, and flat out it reached about 160,000 at 2 /ns. Long, bright pulses are far
+slower: a 500 ns pulse at `kExc` 6 /ns runs about 1,200 molecules per second, though each gives about 25 photons.

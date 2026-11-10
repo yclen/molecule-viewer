@@ -1,5 +1,7 @@
 """Command line for the TTA Flora 4 simulation. See README.md for the commands and what's in the data folder.
 
+Simulated times are in ns and rates per ns. Wall-clock figures (wall_s, seconds in index.csv) are real seconds.
+
   python sim/tta_sim.py run --n 8 --excRatio 0.5
   python sim/tta_sim.py sweep --excRatio 0.01:10:log7 --hopRatio 10,100,1000 --name ratios
   python sim/tta_sim.py exact --n 4
@@ -29,6 +31,7 @@ HERE = Path(__file__).resolve().parent
 DATA = HERE / 'data'
 EXACT_MAX_N = 8  # 3^10 strings. Takes a couple of minutes
 BINS_PER_LIFETIME = 10  # default histogram bin: a tenth of the singlet lifetime
+UNITS = 'times in ns, rates per ns'  # saved in params.json
 
 
 def parse_values(name, text):
@@ -99,7 +102,7 @@ def run_points(mode, args):
     shutil.copy(HERE / 'rules.py', folder / 'rules.py')
     (folder / 'params.json').write_text(json.dumps({
         'mode': mode, 'command': ' '.join(sys.argv[1:]), 'date': f'{datetime.now():%Y-%m-%d %H:%M:%S}',
-        'defaults': DEFAULTS, 'swept': {name: sorted({p[name] for p in points}) for name in swept},
+        'units': UNITS, 'defaults': DEFAULTS, 'swept': {name: sorted({p[name] for p in points}) for name in swept},
         'points': len(points), 'excitations_per_point': args.excitations, 'replicas': args.replicas, 'seed': args.seed,
         'threads': nb.get_num_threads(),
     }, indent=2))
@@ -117,7 +120,7 @@ def run_points(mode, args):
             metrics = summarize(tally)
             events = tally.counts.sum() if mode != 'exact' else np.nan  # exact has rates, not counted events
             timing = {'wall_s': wall, 'events': events, 'events_per_wall_s': events / wall,
-                      'sim_seconds': tally.time if mode != 'exact' else np.nan}
+                      'sim_ns': tally.time if mode != 'exact' else np.nan}
             row = {'point': i, **p, **metrics, **timing}
             if result_rows is None:
                 result_rows = csv.DictWriter(results, row.keys())
@@ -154,36 +157,37 @@ def log_edges(times, bins):
 
 
 def histogram_rows(point, photons, perylene, molecules, duration, edges):
-    """One dict per time bin. photons_per_molecule_per_s doesn't depend on bin width or how many molecules ran."""
+    """One dict per time bin. photons_per_molecule_per_ns doesn't depend on bin width or how many molecules ran."""
     total = np.histogram(photons['time'], edges)[0]
     from_perylene = np.histogram(photons['time'][photons['site'] == perylene], edges)[0]
     scale = 1 / (molecules * np.diff(edges))
     return [{
-        'point': point, 'bin_start_s': edges[k], 'bin_end_s': edges[k + 1], 'pulse_on': int(edges[k] < duration),
+        'point': point, 'bin_start_ns': edges[k], 'bin_end_ns': edges[k + 1], 'pulse_on': int(edges[k] < duration),
         'photons': total[k], 'perylene_photons': from_perylene[k], 'dpa_photons': total[k] - from_perylene[k],
-        'photons_per_molecule_per_s': total[k] * scale[k], 'error': total[k] ** 0.5 * scale[k],
+        'photons_per_molecule_per_ns': total[k] * scale[k], 'error': total[k] ** 0.5 * scale[k],
     } for k in range(len(total))]
 
 
 def pulse_metrics(p, run, molecules, histogram):
-    time_s = run.time
+    times = run.time
     m = summarize(run.tally)
-    for name in ('excitations_per_s', 'photons_per_s', 'mean_triplets_present', 'mean_singlets_present', 'time_to_photon_s'):
+    for name in ('excitations_per_ns', 'photons_per_ns', 'mean_triplets_present', 'mean_singlets_present',
+                 'time_to_photon_ns'):
         del m[name]  # these describe a steady state
-    has_photons = time_s.size > 0
+    has_photons = times.size > 0
     busiest = max(histogram, key=lambda row: row['photons'])
     return {
         'molecules': molecules,
         'excitations_per_molecule': run.excitations.sum() / molecules,
-        'photons_per_molecule': time_s.size / molecules,
+        'photons_per_molecule': times.size / molecules,
         **m,
         'share_of_molecules_with_a_photon': np.unique(run.molecule).size / molecules,
-        'share_of_photons_after_pulse': (time_s >= p['duration']).mean() if has_photons else np.nan,
-        'peak_bin_start_s': busiest['bin_start_s'] if has_photons else np.nan,
-        'mean_emission_s': time_s.mean() if has_photons else np.nan,
-        'median_emission_s': np.median(time_s) if has_photons else np.nan,
-        'last_photon_s': time_s[-1] if has_photons else np.nan,
-        'time_to_photon_s': (time_s - run.born).mean() if has_photons else np.nan,
+        'share_of_photons_after_pulse': (times >= p['duration']).mean() if has_photons else np.nan,
+        'peak_bin_start_ns': busiest['bin_start_ns'] if has_photons else np.nan,
+        'mean_emission_ns': times.mean() if has_photons else np.nan,
+        'median_emission_ns': np.median(times) if has_photons else np.nan,
+        'last_photon_ns': times[-1] if has_photons else np.nan,
+        'time_to_photon_ns': (times - run.born).mean() if has_photons else np.nan,
     }
 
 
@@ -195,7 +199,8 @@ def run_pulses(args):
     (folder / 'params.json').write_text(json.dumps({
         'mode': 'pulse', 'command': ' '.join(sys.argv[1:]), 'date': f'{datetime.now():%Y-%m-%d %H:%M:%S}',
         'defaults': PULSE_DEFAULTS, 'swept': {name: sorted({p[name] for p in points}) for name in swept},
-        'points': len(points), 'molecules': args.molecules, 'bin_s': args.bin or 'tauS / 10', 'seed': args.seed,
+        'points': len(points), 'molecules': args.molecules, 'units': UNITS, 'bin_ns': args.bin or 'tauS / 10',
+        'seed': args.seed,
         'threads': nb.get_num_threads(),
     }, indent=2))
     pulse(build_rules({**DEFAULTS, 'n': 0}), 2, 2, 0.1, 1)  # load the compiled code now, so it isn't timed
@@ -244,8 +249,8 @@ def run_pulses(args):
         print(f"photons per molecule      {metrics['photons_per_molecule']:.4f}")
         print(f"photons per excitation    {metrics['photons_per_excitation']:.4f}")
         print(f"photons after the pulse   {metrics['share_of_photons_after_pulse']:.1%}")
-        print(f"peak bin starts at        {metrics['peak_bin_start_s']:.2f} s")
-        print(f"mean / last photon        {metrics['mean_emission_s']:.2f} s / {metrics['last_photon_s']:.2f} s")
+        print(f"peak bin starts at        {metrics['peak_bin_start_ns']:.2f} ns")
+        print(f"mean / last photon        {metrics['mean_emission_ns']:.2f} ns / {metrics['last_photon_ns']:.2f} ns")
     print(f'\nSimulated {len(points)} point{"s" * (len(points) > 1)} of {args.molecules:,} molecules in {seconds:.1f} s'
           f' on {nb.get_num_threads()} threads')
     print(f'Saved to {folder}')
@@ -284,7 +289,7 @@ def report(p, m, sites, r, E):
     print(f"ISC yield               {m['isc_yield']:.4f}")
     print(f"back transfers          {m['back_transfers']:.4f}")
     print(f"triplets decayed        {m['triplets_decayed']:.4f}")
-    print(f"time to photon          {m['time_to_photon_s']:.2f} s")
+    print(f"time to photon          {m['time_to_photon_ns']:.2f} ns")
     print(f"balance (should be 1)   triplets {m['triplet_balance']:.4f}, singlets {m['singlet_balance']:.4f}\n")
     print(f"{'site':<11}{'r nm':>7}{'FRET':>8}{'photons':>9}{'back':>8}{'TTA S':>8}{'TTA fail':>9}{'time T':>8}{'time S':>8}")
     for s, name in enumerate(site_names(p['n'])):
@@ -336,9 +341,9 @@ def main():
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--name', help='run name, used in the folder name')
     parser.add_argument('--molecules', type=int, default=100_000, help='pulse: how many molecules to flash')
-    parser.add_argument('--bin', type=float, help='pulse, rebin: histogram bin width in s (pulse default: tauS / 10)')
+    parser.add_argument('--bin', type=float, help='pulse, rebin: histogram bin width in ns (pulse default: tauS / 10)')
     parser.add_argument('--logbins', type=int, help='rebin: this many bins spaced by ratio, instead of --bin')
-    parser.add_argument('--xmax', type=float, help='plot: end of the time axis in s')
+    parser.add_argument('--xmax', type=float, help='plot: end of the time axis in ns')
     args = parser.parse_args()
     if args.duration is not None and args.mode != 'pulse':
         parser.error('--duration only applies to pulse')

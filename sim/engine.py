@@ -7,7 +7,8 @@ There are 3^(n + 2) strings, so this is for checking results at small n, not for
 pulse_exact: the expected pulse histogram the same way, by following the share of molecules in every string over time.
 pulse: many molecules, each starting in all G, with a square pulse of light. Records every photon's emission time.
 
-monte_carlo, exact and pulse give a Tally, so summarize() treats them alike.
+monte_carlo, exact and pulse give a Tally, so summarize() treats them alike. Simulated time is in ns; the solve
+time estimates (exact_seconds, _setup_s, _step_s) are real seconds.
 """
 
 from dataclasses import dataclass
@@ -28,9 +29,9 @@ EXCITATION, HOP, TTA_SINGLET, TTA_FAILED, PHOTON, BACK = (EVENTS.index(e) for e 
 @dataclass
 class Tally:
     counts: np.ndarray  # [event, site]
-    time: float  # sim seconds these counts cover
-    occupancy: np.ndarray  # [site, letter]: seconds spent
-    latency: float = np.nan  # mean seconds from excitation to photon
+    time: float  # simulated ns these counts cover
+    occupancy: np.ndarray  # [site, letter]: ns spent
+    latency: float = np.nan  # mean ns from excitation to photon
     yield_se: float = np.nan  # standard error of photons per excitation
 
 
@@ -215,7 +216,7 @@ def _pulse_chunks(a, b, fa, fb, ta, tb, rate, event, where, sites, duration, edg
 
 
 def pulse(rules, sites, molecules, duration, seed=1, chunks=256):
-    """Flash `molecules` molecules with the rules' kExc for `duration` seconds, and follow each until nothing is left.
+    """Flash `molecules` molecules with the rules' kExc for `duration` ns, and follow each until nothing is left.
 
     Molecules are shared out in a fixed number of chunks, so the same seed gives the same photons on any machine.
     """
@@ -352,7 +353,7 @@ def exact_seconds(p, window):
 
 @dataclass
 class PulseExact:
-    times: np.ndarray  # the end of each step, from 0 to the window, s
+    times: np.ndarray  # the end of each step, from 0 to the window, ns
     perylene: np.ndarray  # expected photons per molecule from the perylene, from t = 0 to each time
     dpa: np.ndarray  # the same from the DPAs
     excitations: float  # per molecule, over the whole pulse. nan if the pulse lasts past the window
@@ -444,6 +445,45 @@ def pulse_exact(rules, p, window, progress=None):
                       x[size + 2] if whole else np.nan, x[size] + x[size + 1] if whole else np.nan, still_active)
 
 
+@dataclass
+class FluorescenceExact:
+    """pulse_exact's answer for a two-state fluorophore (rules.fluorescence_rules), which has a closed form.
+
+    With a = kExc and k = 1/tauFl, the share in S during the pulse is P(t) = a/(a + k) (1 - exp(-(a + k) t)), and after
+    it P decays at k. Photons come at fluorYield * k * P. Every excitation ends in S -> G, so over the whole pulse the
+    photons are fluorYield times the excitations.
+    """
+    p: dict
+    excitations: float = np.nan
+    photons: float = np.nan
+    still_active: float = 0.0  # the closed form counts every photon, however late
+
+    def __post_init__(self):
+        self.excitations = self.decays(np.inf)
+        self.photons = self.p['fluorYield'] * self.excitations
+
+    def decays(self, t):
+        """S -> G from t = 0 to each time in t, per molecule."""
+        a, k, pulse = self.p['kExc'], 1 / self.p['tauFl'], self.p['duration']
+        s = a + k
+        t = np.asarray(t, float)
+        lit = np.minimum(t, pulse)
+        during = k * a / s * (lit + np.expm1(-s * lit) / s)
+        at_end = -a / s * np.expm1(-s * pulse)  # the share in S when the pulse ends
+        dark = np.maximum(t - pulse, 0)
+        return during + at_end * -np.expm1(-k * dark)
+
+    def binned(self, edges):
+        """Expected photons per molecule in each bin, in the same two-list form as PulseExact (the second is empty)."""
+        photons = np.diff(self.p['fluorYield'] * self.decays(edges))
+        return [photons, np.zeros_like(photons)]
+
+
+def fluorescence_exact(p, window=None):
+    """The expected pulse histogram for a two-state fluorophore. Instant, so there's no progress to report."""
+    return FluorescenceExact(p)
+
+
 def summarize(tally):
     """The whole-system metrics, per excitation unless the name says otherwise."""
     per_event = {e: tally.counts[i] for i, e in enumerate(EVENTS)}
@@ -470,11 +510,11 @@ def summarize(tally):
         'tta_singlet_dpa': tta_s[:-1].sum() * x,
         'tta_failed_perylene': tta_f[-1] * x,
         'tta_failed_dpa': tta_f[:-1].sum() * x,
-        'excitations_per_s': excitations / tally.time,
-        'photons_per_s': photons.sum() / tally.time,
+        'excitations_per_ns': excitations / tally.time,
+        'photons_per_ns': photons.sum() / tally.time,
         'mean_triplets_present': tally.occupancy[:, 1].sum() / tally.time,
         'mean_singlets_present': tally.occupancy[:, 2].sum() / tally.time,
-        'time_to_photon_s': tally.latency,
+        'time_to_photon_ns': tally.latency,
         # bookkeeping: both should be 1 (a triplet made ends in TTA or decay; a singlet on the sensitizer ends in
         # ISC or decay). They only differ from 1 by whatever was still in flight when the run stopped
         'triplet_balance': (2 * tta_s.sum() + tta_f.sum() + decays) / isc if isc else np.nan,
