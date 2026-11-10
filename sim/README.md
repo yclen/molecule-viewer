@@ -14,8 +14,10 @@ Needs Python with `numpy`, `scipy` and `numba`. The first run compiles for a few
 | `engine.py` | Monte Carlo, the exact solvers (long-run and pulse) and the metrics. |
 | `plot_pulse.py` | The figures for pulse runs. |
 | `plot_yield.py` | The quantum yield figure for sweeps. |
+| `plot_intensity.py` | The figures for intensity sweeps: photons per molecule and quantum yield against `kExc`. |
 | `tta_sim.py` | The commands and data saving. |
 | `live.py` | The live histogram window (see "Live window"). Needs `PyQt6` and `pyqtgraph`. |
+| `sweep_gui.py` | The window for running and plotting intensity sweeps (see "Sweep window"). Same needs, plus `matplotlib`. |
 | `formulas.md` | The model as math: the state vector, the 10 rules, the master equation and how each method uses it. |
 
 ## Commands
@@ -43,6 +45,10 @@ python sim/tta_sim.py pulse --excRatio 1 --hopRatio 100 --duration 5 --name firs
 ```
 
 ```bash
+python sim/tta_sim.py intensity --kExc 0.001:100:log31 --duration 5 --checks 3 --name qy-vs-kexc
+```
+
+```bash
 python sim/tta_sim.py rebin 2026-11-06_first-pulse --bin 0.01
 ```
 
@@ -54,10 +60,11 @@ python sim/tta_sim.py plot 2026-11-06_first-pulse
 - `sweep`: every combination of the values given.
 - `exact`: the long-run answer with no random noise, up to `n = 8` (about 2 minutes there, seconds at `n` of 6 or less).
 - `pulse`: flashes many molecules and records when every photon is emitted (see "Pulse runs").
+- `intensity`: total photons and excitations per molecule over one pulse, against `kExc` (see "Intensity sweeps").
 - `rebin`: builds a new histogram from a pulse run's saved photons, with no new simulation.
 - `plot`: draws a run into a `plots/` folder. Needs `matplotlib`. A pulse run gets its emission histograms. A sweep of
   `excRatio` gets `quantum_yield.png`, with one line per value if it also varies one other parameter (up to 5 values).
-  Points with under 30 photons are left out.
+  Points with under 30 photons are left out. An intensity run gets its four figures (see "Intensity sweeps").
 - `check`: compares Monte Carlo with the exact solve and checks the bookkeeping.
 
 Every parameter is an option, and any of them can be swept:
@@ -230,6 +237,100 @@ import numpy as np
 photons = np.load('sim/data/2026-11-06_first-pulse/photons/point_0000.npz')
 print(photons['time'][:10])
 ```
+
+## Intensity sweeps
+
+How many photons a molecule gives over one pulse, and how many times it absorbs, as the excitation rate goes up. This
+is the data for photons against laser power and quantum yield against power: `kExc` is proportional to power, so the
+conversion (an absorption cross-section) can be applied afterwards.
+
+```bash
+python sim/tta_sim.py intensity --kExc 0.001:100:log31 --duration 5,50 --checks 3 --name qy-vs-kexc
+```
+
+Every molecule starts in all `G`, gets one pulse of `duration` ns and is followed until it can't emit any more, the
+same as `pulse`. Any parameter can be swept alongside `kExc`. Each extra value gives another curve.
+
+- `--method exact` (the default): `engine.pulse_totals`, with no random noise at any `kExc`, so it holds up at very low
+  power, where Monte Carlo would need enormous numbers of molecules (a photon needs two absorptions in one pulse, so
+  photons fall as `kExc²`). Up to `n = 8`. At `n = 8` the first point takes about 20 s and each one after about 5 s;
+  at `n` of 6 or less they take under a second. Long, bright pulses take longer. `formulas.md` has how it works.
+- `--checks 3`: with the exact solve, also runs Monte Carlo at 3 points spread over the sweep, as a check.
+- `--method mc`: Monte Carlo at every point, for `n` above 8. `--method both` runs both at every point.
+- Monte Carlo adds batches of `--batch` molecules (default 100,000) until photons per molecule is known to
+  `--precision` (default 0.01, a 1% standard error), or `--max-seconds` (default 600) runs out for that point.
+
+It saves no photon times, only totals, so a run is a few kB. Each row is written as soon as its point is done, so a
+stopped sweep keeps what it finished.
+
+```text
+sim/data/2026-11-10_qy-vs-kexc/
+  results.csv                 one row per point per method
+  params.json
+  rules.py
+  plots/                      after `plot`: photons_linear.png, photons_log.png, quantum_yield.png,
+                              quantum_yield_log_kexc.png
+```
+
+Every count is **per molecule, per pulse**. Quantum yield is `photons_per_molecule / excitations_per_molecule`.
+
+| `results.csv` column | Meaning |
+|---|---|
+| `point`, `method` | which setting, and `exact` or `mc` |
+| the parameters | `n`, `kHop`, `kExc`, `duration` and the rest, as in `results.csv` of a sweep |
+| `photons_per_molecule` | photons, the sum of the next two |
+| `perylene_photons_per_molecule`, `dpa_photons_per_molecule` | where they came from |
+| `excitations_per_molecule` | rule 1 events. Below `kExc × duration` once the sensitizer is often busy |
+| `isc_per_molecule`, `sens_singlets_lost_per_molecule` | what sensitizer singlets did: ISC, or rule 9 |
+| `back_transfers_per_molecule` | singlets taken back by the sensitizer |
+| `tta_singlet_per_molecule`, `tta_failed_per_molecule` | TTA events that made a singlet, and ones that didn't |
+| `triplets_decayed_per_molecule` | triplets lost to rule 3, including the one left over at the end, if any |
+| `molecules` | Monte Carlo only: how many were flashed |
+| `mean_photons_sq`, `mean_excitations_sq`, `mean_photons_x_excitations` | Monte Carlo only: averages over molecules, for error bars on any ratio |
+| `photons_relative_error` | Monte Carlo only: the standard error of photons per molecule, as a share |
+| `wall_s` | real seconds the point took |
+
+The standard error of photons per molecule is `sqrt((mean_photons_sq − photons²) / molecules)`. `plot_intensity.py`
+has the error on quantum yield, which also uses the excitation columns.
+
+`plot` on an intensity run saves four figures. Several runs can be drawn together from the sweep window.
+
+- **Photons per molecule, linear:** the total, plus perylene and DPA when there's one curve.
+- **Photons per molecule, log, with slope:** log on both axes, and under it the local slope
+  `d log(photons) / d log(kExc)`. It's 2 while a photon needs two absorptions in one pulse and falls to 0 at saturation,
+  so the stages of saturation show as where it leaves 2 and where it reaches 0.
+- **Quantum yield, linear,** in percent, with the limit `100 × tripletYield × f / (1 + f)`.
+- **Quantum yield, log kExc:** the same, with `kExc` on a log scale and the yield still linear, so the rise at low
+  power isn't squeezed against the axis.
+
+Exact rows are lines, Monte Carlo rows open markers with error bars. When every curve has the same pulse length, a
+second axis along the top shows `kExc × duration`, the absorptions per pulse if the sensitizer were always free.
+
+**Laser power axis.** `kExc` is proportional to power, so any figure can have power in mW along the bottom instead,
+with `kExc` along the top. `--kexc-per-mw 0.0389` does it for `plot`, saving files that end in `_power.png` beside
+the `kExc` ones. The sweep window has a checkbox for it, and its default is the live window's `kExc per mW`, worked out
+from the beam settings at the top of `live.py`. At 1 µm 1/e² radius, 635 nm and ε = 50,000 /M/cm (σ = 1.91 × 10⁻¹⁶ cm²)
+that's 0.0389 /ns per mW, at the beam's peak intensity 2P/(πw²). Averaged over the 1/e² spot it would be half that.
+
+## Sweep window
+
+```bash
+python sim/sweep_gui.py
+```
+
+**Run** has a box for every parameter, in the same units and with the same names as the live window. Every box takes
+what the command line takes, so `5,50` in pulse length gives two curves. Set the `kExc` range, its number of points and
+spacing (by ratio for the log plot, even for the linear ones), pick the method and press RUN SWEEP. It runs the
+`intensity` command in its own process, shown underneath so you can copy it. Photons per molecule appear on a log plot
+point by point, with progress and time left. STOP keeps the points finished so far. A box with a value out of range
+turns red, and the exact solve isn't offered above `n = 8`.
+
+**Plot** lists every intensity run in `sim/data`, newest first, with the `n` and pulse lengths it used. Select one, or
+several with Ctrl or Shift, and open any of the four figures in its own matplotlib window, with zoom, pan and save.
+Hovering shows the nearest point's values. "Log x axis on the linear plots" is there for sweeps spaced by ratio.
+"Laser power on the x axis" switches every figure opened after it to power in mW, using the `kExc per mW` box
+under it (see "Laser power axis" above), and "Save PNGs" then writes the `_power.png` files.
+"Save PNGs" writes each selected run's `plots/` folder. A run that finishes opens here on its own.
 
 ## Live window
 

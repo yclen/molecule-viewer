@@ -289,6 +289,42 @@ few minutes at $n = 9$. The step count barely depends on `hopRatio`, which is wh
 Monte Carlo with millions of molecules, the histograms agree bin by bin (chi-square) and the quantum yields agree
 within the Monte Carlo error.
 
+### Totals over one pulse: `pulse_totals`, for intensity sweeps
+
+An intensity sweep needs no histogram, only how many of each event a molecule gives over the whole pulse and
+everything after it. `pulse_totals` works those out exactly, in two parts.
+
+**During the pulse**, it adds a row to $Q$ for every event at every site, so those entries of $\mathbf{P}$ become
+running totals, as in `pulse_exact`. With the light on, $Q$ doesn't change, so the answer at the end of the pulse is
+just
+
+$$
+\mathbf{P}(d) = e^{Q d}\, \mathbf{P}(0),
+$$
+
+which `expm_multiply` works out directly, accurate to rounding. That matters at low power: there the photon totals
+are of order $(k_\text{exc} d)^2$, far smaller than the all-$G$ entry near 1, and a stepping method's error, which is
+relative to the whole vector, would swamp them.
+
+**After the pulse**, no more light comes, so instead of following time it asks how long a molecule will spend in
+each string from then on. Call the strings that can still give a photon active: two or more excited sites, or any
+singlet. A string with just one triplet can't make another photon without light, so it's treated as an end, along
+with all $G$. With $Q_A$ the part of $Q$ (light off) among active strings, the expected time in each active string is
+
+$$
+\boldsymbol{\tau} = (-Q_A)^{-1}\, \mathbf{P}_A(d),
+$$
+
+one sparse linear solve (an LU up to $n = 6$, GMRES with an incomplete LU above). Every later event of rule $r$ is
+then $k_r$ times the time spent in the strings it fires from. A molecule that ends with one triplet is counted as one
+triplet decayed, on the perylene: nothing hops off the perylene, and a hop is about $10^7$ times faster than triplet
+decay, so the triplet gets there first. Hops after the pulse aren't counted.
+
+$-Q_A$ doesn't depend on $k_\text{exc}$ or $d$, so a sweep of those factors it once and reuses it. At $n = 8$ that's
+about 15 s once, then about 5 s a point, mostly the matrix exponential, which takes longer for long or bright pulses
+(its cost goes as $\lVert Q \rVert\, d$). It needs no cut-off, the bookkeeping balances to rounding, and at low power
+the photons rise as $k_\text{exc}^2$ to four decimal places, since a photon needs two absorptions in one pulse.
+
 ### Monte Carlo: `monte_carlo`, `pulse` and `live.py`
 
 For large $n$, the vector is too long to work with, so instead of evolving the probabilities, the engine follows one

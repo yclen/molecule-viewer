@@ -7,6 +7,7 @@ Simulated times are in ns and rates per ns. Wall-clock figures (wall_s, seconds 
   python sim/tta_sim.py exact --n 4
   python sim/tta_sim.py pulse --excRatio 1 --hopRatio 100 --duration 5 --name first-pulse
   python sim/tta_sim.py rebin 2026-11-06_first-pulse --bin 0.01
+  python sim/tta_sim.py intensity --kExc 0.001:100:log31 --duration 5 --name qy-vs-kexc
   python sim/tta_sim.py plot 2026-11-06_first-pulse
   python sim/tta_sim.py check
 """
@@ -24,7 +25,7 @@ from pathlib import Path
 import numba as nb
 import numpy as np
 
-from engine import EVENTS, exact, monte_carlo, per_site, pulse, summarize
+from engine import EVENTS, exact, monte_carlo, per_site, pulse, pulse_totals, summarize
 from rules import DEFAULTS, PULSE_DEFAULTS, build_rules, fret_efficiency, resolve, site_distances
 
 HERE = Path(__file__).resolve().parent
@@ -256,6 +257,97 @@ def run_pulses(args):
     print(f'Saved to {folder}')
 
 
+PER_MOLECULE = {  # intensity columns, each per molecule, and the event behind it
+    'excitations_per_molecule': 'excitation', 'isc_per_molecule': 'isc',
+    'sens_singlets_lost_per_molecule': 'sens_singlet_lost', 'back_transfers_per_molecule': 'back_transfer',
+    'tta_singlet_per_molecule': 'tta_singlet', 'tta_failed_per_molecule': 'tta_failed',
+    'triplets_decayed_per_molecule': 'triplet_lost',
+}
+
+
+def intensity_counts(counts, molecules):
+    """The raw counts of an intensity point from a [event, site] table of events, all per molecule."""
+    photons = counts[EVENTS.index('photon')] / molecules
+    return {'photons_per_molecule': photons.sum(), 'perylene_photons_per_molecule': photons[-1],
+            'dpa_photons_per_molecule': photons[:-1].sum(),
+            **{name: counts[EVENTS.index(event)].sum() / molecules for name, event in PER_MOLECULE.items()}}
+
+
+def intensity_mc(p, args, seed):
+    """Monte Carlo for one intensity point: batches of molecules until photons per molecule is known to
+    args.precision (relative standard error), or args.max_seconds runs out."""
+    rules, sites = build_rules(p), p['n'] + 2
+    started = time.perf_counter()
+    molecules, counts = 0, np.zeros((len(EVENTS), sites))
+    sums = np.zeros(3)  # photons², excitations² and photons × excitations, added up over molecules
+    batch, error = args.batch, np.inf
+    while True:
+        run = pulse(rules, sites, batch, p['duration'], seed + molecules)
+        photons = np.bincount(run.molecule, minlength=batch)
+        excitations = run.excitations.astype(float)
+        sums += [(photons ** 2).sum(), (excitations ** 2).sum(), (photons * excitations).sum()]
+        counts += run.tally.counts
+        molecules += batch
+        mean = counts[EVENTS.index('photon')].sum() / molecules
+        if mean > 0:
+            error = np.sqrt(max(sums[0] / molecules - mean ** 2, 0) / molecules) / mean
+        if error <= args.precision or time.perf_counter() - started > args.max_seconds:
+            break
+    return {**intensity_counts(counts, molecules), 'molecules': molecules, 'mean_photons_sq': sums[0] / molecules,
+            'mean_excitations_sq': sums[1] / molecules, 'mean_photons_x_excitations': sums[2] / molecules,
+            'photons_relative_error': error}
+
+
+MC_ONLY = dict.fromkeys(['molecules', 'mean_photons_sq', 'mean_excitations_sq', 'mean_photons_x_excitations',
+                         'photons_relative_error'], np.nan)  # empty on exact rows
+
+
+def run_intensity(args):
+    """Total photons and excitations per molecule over one pulse, against kExc (or anything else swept)."""
+    points, swept = grid(args, PULSE_DEFAULTS)
+    method = args.method
+    if method in ('exact', 'both') and max(p['n'] for p in points) > EXACT_MAX_N:
+        sys.exit(f'the exact solve only goes up to n = {EXACT_MAX_N}. Use --method mc above that')
+    checks = set()
+    if method == 'exact' and args.checks:
+        checks = {int(round(k)) for k in np.linspace(0, len(points) - 1, args.checks + 2)[1:-1]}
+    folder = new_run_folder('intensity', args.name, swept)
+    shutil.copy(HERE / 'rules.py', folder / 'rules.py')
+    (folder / 'params.json').write_text(json.dumps({
+        'mode': 'intensity', 'command': ' '.join(sys.argv[1:]), 'date': f'{datetime.now():%Y-%m-%d %H:%M:%S}',
+        'units': UNITS, 'defaults': PULSE_DEFAULTS, 'swept': {name: sorted({p[name] for p in points}) for name in swept},
+        'points': len(points), 'method': method, 'checks': sorted(checks), 'precision': args.precision,
+        'max_seconds': args.max_seconds, 'batch': args.batch, 'seed': args.seed, 'threads': nb.get_num_threads(),
+    }, indent=2))
+    print(f'Saving to {folder}', flush=True)
+    if method != 'exact' or checks:
+        pulse(build_rules({**DEFAULTS, 'n': 0}), 2, 2, 0.1, 1)  # load the compiled code now, so it isn't timed
+
+    started = time.time()
+    with (folder / 'results.csv').open('w', newline='') as out:
+        writer = None
+        for i, p in enumerate(points):
+            runs = {'exact': ['exact'], 'mc': ['mc'], 'both': ['exact', 'mc']}[method] + ['mc'] * (i in checks)
+            for how in runs:
+                began = time.perf_counter()
+                if how == 'exact':
+                    found = {**intensity_counts(pulse_totals(build_rules(p), p).counts, 1), **MC_ONLY}
+                else:
+                    found = intensity_mc(p, args, args.seed + 1_000_000_000 * i)
+                row = {'point': i, 'method': how, **p, **found, 'wall_s': time.perf_counter() - began}
+                if writer is None:
+                    writer = csv.DictWriter(out, row.keys())
+                    writer.writeheader()
+                writer.writerow(row)
+                out.flush()  # a stopped sweep keeps what it finished
+                print(f"point {i + 1}/{len(points)} {how} kExc {p['kExc']:.4g} photons {found['photons_per_molecule']:.4g}"
+                      f" in {row['wall_s']:.1f} s, {time.time() - started:.0f} s so far", flush=True)
+    seconds = time.time() - started
+    add_to_index(folder, 'intensity', len(points), swept, seconds)
+    print(f'\nDone: {len(points)} point{"s" * (len(points) > 1)} in {seconds:.1f} s')
+    print(f'Saved to {folder}')
+
+
 def rebin(args):
     """Build a new histogram from a pulse run's saved photons. The original histogram stays as it is."""
     folder = DATA / args.folder
@@ -332,7 +424,7 @@ def check(args):
 
 def main():
     parser = argparse.ArgumentParser(description='TTA Flora 4 simulation')
-    parser.add_argument('mode', choices=['run', 'sweep', 'exact', 'pulse', 'rebin', 'plot', 'check'])
+    parser.add_argument('mode', choices=['run', 'sweep', 'exact', 'pulse', 'intensity', 'rebin', 'plot', 'check'])
     parser.add_argument('folder', nargs='?', help='rebin, plot: the run folder inside sim/data')
     for name, value in PULSE_DEFAULTS.items():
         parser.add_argument(f'--{name}', help=f'default {value}. One value, a,b,c, a:b, a:b:count or a:b:logcount')
@@ -344,9 +436,18 @@ def main():
     parser.add_argument('--bin', type=float, help='pulse, rebin: histogram bin width in ns (pulse default: tauS / 10)')
     parser.add_argument('--logbins', type=int, help='rebin: this many bins spaced by ratio, instead of --bin')
     parser.add_argument('--xmax', type=float, help='plot: end of the time axis in ns')
+    parser.add_argument('--kexc-per-mw', type=float,
+                        help='plot, intensity run: put laser power on the x axis, at this kExc (/ns) per mW')
+    parser.add_argument('--method', choices=['exact', 'mc', 'both'], default='exact',
+                        help='intensity: the exact solve (n up to 8), Monte Carlo, or both at every point')
+    parser.add_argument('--checks', type=int, default=0, help='intensity, exact: also run Monte Carlo at this many points')
+    parser.add_argument('--precision', type=float, default=0.01,
+                        help='intensity, Monte Carlo: stop at this relative standard error on photons per molecule')
+    parser.add_argument('--max-seconds', type=float, default=600, help='intensity, Monte Carlo: most seconds per point')
+    parser.add_argument('--batch', type=int, default=100_000, help='intensity, Monte Carlo: molecules per batch')
     args = parser.parse_args()
-    if args.duration is not None and args.mode != 'pulse':
-        parser.error('--duration only applies to pulse')
+    if args.duration is not None and args.mode not in ('pulse', 'intensity'):
+        parser.error('--duration only applies to pulse and intensity')
     if args.mode in ('rebin', 'plot') and not args.folder:
         parser.error(f'{args.mode} needs a run folder')
     if args.mode == 'rebin' and not (args.bin or args.logbins):
@@ -355,13 +456,19 @@ def main():
         check(args)
     elif args.mode == 'pulse':
         run_pulses(args)
+    elif args.mode == 'intensity':
+        run_intensity(args)
     elif args.mode == 'rebin':
         rebin(args)
     elif args.mode == 'plot':
         from plot_pulse import plot_run  # only this command needs matplotlib
         from plot_yield import plot_sweep
+        from plot_intensity import is_intensity, save_all
         folder = DATA / args.folder
-        print(f'Saved to {plot_run(folder, args.xmax) if (folder / "photons").is_dir() else plot_sweep(folder)}')
+        if is_intensity(folder):
+            print(f'Saved to {save_all(folder, args.kexc_per_mw)}')
+        else:
+            print(f'Saved to {plot_run(folder, args.xmax) if (folder / "photons").is_dir() else plot_sweep(folder)}')
     else:
         run_points(args.mode, args)
 

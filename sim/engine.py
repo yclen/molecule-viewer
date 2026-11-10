@@ -484,6 +484,87 @@ def fluorescence_exact(p, window=None):
     return FluorescenceExact(p)
 
 
+_AFTER = {}  # the last after-pulse factorization. It doesn't depend on kExc or the pulse length, so a sweep of those
+# factors once (about 15 s at n = 8)
+
+
+def _solver(key, A):
+    """A function solving A x = b: an LU when small, otherwise GMRES with an incomplete LU, as in exact()."""
+    if _AFTER.get('key') != key:
+        _AFTER.clear()
+        if A.shape[0] <= 3 ** 8:
+            _AFTER['solve'] = linalg.splu(A.tocsc()).solve
+        else:
+            ilu = linalg.LinearOperator(A.shape, linalg.spilu(A.tocsc(), drop_tol=1e-5, fill_factor=30).solve)
+
+            def solve(b):
+                x, info = linalg.gmres(A, b, M=ilu, rtol=1e-12, atol=0, restart=100, maxiter=50)
+                if info:
+                    raise RuntimeError(f'the after-pulse solve did not converge (gmres info {info})')
+                return x
+            _AFTER['solve'] = solve
+        _AFTER['key'] = key
+    return _AFTER['solve']
+
+
+def pulse_totals(rules, p):
+    """Every event one molecule gives over one whole pulse, on average, with no random noise and no cut-off.
+
+    `rules` are build_rules(p), with p resolved. Every molecule starts in all G, with kExc on until p['duration'].
+    Returns a Tally of events per molecule ([event, site]), for the intensity sweep.
+
+    During the pulse: the matrix exponential of the master equation, with extra rows that add up each event as it
+    fires (expm_multiply, which is accurate to rounding however small a count is, so it holds up at very low power).
+    After the pulse: no more light, so one linear solve gives the expected time a molecule spends in each string from
+    then on, and that times each rule's rate gives every later event. A molecule left with one triplet and nothing else
+    can't make another photon, so it stops there and is counted as one triplet decayed, on the perylene (the triplet
+    hops there long before it decays, since nothing hops off the perylene). Hops after the pulse aren't counted (nan).
+    """
+    sites = p['n'] + 2
+    size = 3 ** sites
+    moves, digit = _transitions(rules, sites)
+    digit = np.array(digit)
+    excited = (digit > 0).sum(0)
+    lone_triplet = (excited == 1) & ((digit == 2).sum(0) == 0)
+    active = (excited > 0) & ~lone_triplet  # can still emit with no more light
+
+    counts = np.zeros((N_EVENTS, sites))
+    x = np.zeros(size)
+    x[0] = 1.0
+    if p['duration'] > 0 and p['kExc'] > 0:
+        rows, cols, vals = [], [], []
+        for src, dst, rate, event, where in moves:
+            rows += [dst, src, np.full(src.size, size + event * sites + where)]
+            cols += [src, src, src]
+            vals += [np.full(src.size, rate), np.full(src.size, -rate), np.full(src.size, rate)]
+        extra = N_EVENTS * sites
+        A = sparse.csr_matrix((np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))),
+                              shape=(size + extra, size + extra))
+        start = np.zeros(size + extra)
+        start[0] = 1.0
+        end = linalg.expm_multiply(A * p['duration'], start)
+        x, counts = end[:size], end[size:].reshape(N_EVENTS, sites).copy()
+
+    after = [m for m in moves if m[3] != EXCITATION]
+    key = (sites, tuple(rule for rule in rules if rule[7] != EXCITATION))
+    keep = np.flatnonzero(active)
+    if _AFTER.get('key') != key:
+        rows = np.concatenate([np.r_[dst, src] for src, dst, *_ in after])
+        cols = np.concatenate([np.r_[src, src] for src, *_ in after])
+        vals = np.concatenate([np.r_[np.full(src.size, rate), np.full(src.size, -rate)] for src, _, rate, *_ in after])
+        Q = sparse.csr_matrix((vals, (rows, cols)), shape=(size, size))
+        _solver(key, -Q[keep][:, keep])
+    time_in = np.zeros(size)  # ns spent in each string after the pulse, until all G or one triplet
+    time_in[keep] = _AFTER['solve'](x[keep])
+    ends_with_triplet = x[lone_triplet].sum()
+    for src, dst, rate, event, where in after:
+        counts[event, where] += rate * time_in[src].sum()
+        ends_with_triplet += rate * time_in[src[lone_triplet[dst]]].sum()
+    counts[EVENTS.index('triplet_lost'), -1] += ends_with_triplet
+    counts[HOP] = np.nan
+    return Tally(counts, 1.0, np.zeros((sites, 3)))
+
+
 def summarize(tally):
     """The whole-system metrics, per excitation unless the name says otherwise."""
     per_event = {e: tally.counts[i] for i, e in enumerate(EVENTS)}
