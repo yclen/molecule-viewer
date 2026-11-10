@@ -122,15 +122,27 @@ onExcite('Sensitizer', () => decay('Sensitizer', tau));
   `pause()` stops the clock.
 
 The presets are in `samples/sims/` (the first comment line is the name): **Walk along the molecule**,
-**Random sensitizer excitation**, and **TTA cascade**. TTA cascade runs on TTA Flora 4: the sensitizer gets
-excited at random into its S₁ (rate `kExc`) and stays there until intersystem crossing turns it into its T₁ (rate
-`kISC`, default 2.82 per second, so about 0.35 s). That triplet hops to the nearest DPA at rate `kHop`. Triplets
-random-walk along the DPA chain, forward or back but never back onto the sensitizer. The perylene is a trap: a triplet that reaches it
-stays until a second one arrives, and then the perylene goes to S₁ (the upconverted photon). Two triplets that
-meet on a DPA annihilate there instead (homoTTA), and that DPA goes to S₁. `kHop` (default 54.2 per second, left
-and right together) sets each triplet's random wait before its next hop. `kDecay` (default 0.001 per second, so about 1000 s) is how fast a triplet decays on its own. `kExc`, `kISC`, `kHop`
-and `kDecay` are sliders. A higher `kHop` gets
-triplets to the perylene sooner and cuts homoTTA.
+**Random sensitizer excitation**, and **TTA cascade**. TTA cascade runs on TTA Flora 4 and follows the same 10
+rules as the standalone simulation in `sim/` (listed in `sim/README.md`, as equations in `sim/formulas.md`), on one
+molecule under steady light. Every site is in its ground state, T₁ or S₁, never two at once:
+
+- The sensitizer gets excited at random into its S₁ (`kExc`). That singlet either turns into T₁ by intersystem
+  crossing (`kISC`, default 2.82 per second, so about 0.35 s) or just decays. `tripletYield` (default 0.5) is the
+  share that makes a triplet.
+- The sensitizer's triplet hops to DPA 1, and triplets random-walk along the DPA chain, forward or back but never
+  back onto the sensitizer. `kHop` (default 54.2 per second, both directions together) sets each triplet's random
+  wait before its next hop. A triplet can't hop onto a singlet: it stays and tries again later. The perylene is a
+  trap and never lets go.
+- A triplet that hops onto another triplet annihilates with it (TTA). With chance `f` (default 0.4) the landing
+  site goes to S₁; otherwise one triplet survives there. On a DPA this is homoTTA, which a higher `kHop` cuts by
+  getting triplets to the perylene sooner.
+- A singlet on a DPA or the perylene emits a photon after 0.3 s on average, unless it goes back to the sensitizer
+  by FRET first: chance 1 / (1 + (r / `fretRadius`)⁶) at distance r, and only while the sensitizer is in its
+  ground state.
+- A triplet on a DPA or the perylene decays on its own at `kDecay` (default 0.001 per second, so about 1000 s).
+
+`kExc`, `kISC`, `tripletYield`, `kHop`, `kDecay`, `f` and `fretRadius` are sliders. The counters show each kind of
+event, and photons per excitation counts all photons (DPAs and perylene) per sensitizer excitation, as `sim/` does.
 Edits are saved in the browser per script, and **Revert** goes back to the preset. Errors stop the run and
 show the message (an unknown site, an `every(0)`, or handlers that keep switching each other). Changing the
 molecule, or n, resets the run.
