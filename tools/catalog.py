@@ -27,6 +27,7 @@ Counter-ions (Na+, K+, Cl-, Br-) are dropped: the coloured/fluorescent species i
 """
 
 from catalog_photophysics import PHOTOPHYSICS as _PHOTOPHYSICS
+from catalog_selfheal_info import SELFHEAL_INFO as _SELFHEAL_INFO
 from catalog_uji2026 import EMITTERS as _UC_EMITTERS
 from catalog_uji2026 import SENSITIZERS as _UC_SENSITIZERS
 
@@ -307,3 +308,7 @@ MOLECULES = {
     "uc-sens": _UC_SENSITIZERS,
     "uc-emit": _UC_EMITTERS,
 }
+
+# About-panel texts for the Self-healing dyes tab live in catalog_selfheal_info.py (keyed by file)
+for _entry in MOLECULES["selfheal"]:
+    _entry["info"] = _SELFHEAL_INFO[_entry["file"]]

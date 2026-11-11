@@ -222,7 +222,8 @@ triplet (a dark, reactive state: blinking, singlet oxygen, bleaching) drains int
 (TTET), and its S₁ sits far above the dye's S₁, so the dye's fluorescence is left alone. Cyclooctatetraene (COT) is
 the standard quencher: its T₁ relaxes to ~0.95 eV by flattening (Baird aromatic), its S₁ is ~4 eV and dark, and its
 triplet drops back to the ground state. Cy5's T₁ is 1.60 eV and its S₁ 1.9 eV. Built with `blocks` in
-`tools/catalog.py`, so the dye and the COT are separate sites.
+`tools/catalog.py`, so the dye and the COT are separate sites. Each entry's About panel text is in
+`tools/catalog_selfheal_info.py`.
 
 - **Cy5–COT (Altman 2012)**: COT on a flexible tether from an indolenine nitrogen (Altman et al., *Nat. Methods* 9,
   68, 2012). TTET happens when the tether lets the two touch: Cy5's triplet lifetime falls from 63 µs to 1.1 µs with
