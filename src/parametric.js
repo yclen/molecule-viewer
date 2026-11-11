@@ -66,7 +66,60 @@ function swapSensitizer(rows0, sensIdx, swap, context, variant) {
   };
 }
 
+/** Rows [[symbol, x, y, z]] turned k steps about z (twist per step) and lifted k rises: one helical screw step. */
+function screwRows(list, k, twist, rise) {
+  const c = Math.cos(k * twist);
+  const s = Math.sin(k * twist);
+  return list.map(([sym, x, y, z]) => [sym, [x * c - y * s, x * s + y * c, z + k * rise]]);
+}
+
+const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const unit3 = (a) => {
+  const l = Math.hypot(...a);
+  return [a[0] / l, a[1] / l, a[2] / l];
+};
+
 const BUILDERS = {
+  /**
+   * Cy3 | n base pairs of B-DNA | Cy5 (tools/build_fret.py). The base pair repeats by its helical screw; Cy3 is locked
+   * to the first pair, Cy5 to the last, so the angle between their transition dipoles (along the N–N axis of each
+   * cyanine) turns with n. Reports the distance, κ² and the FRET efficiency, against the freely tumbling κ² = 2/3.
+   */
+  helix(d, n) {
+    const atoms = [];
+    for (let k = 0; k < n; k++) atoms.push(...screwRows(d.unit, k, d.twist, d.rise));
+    const cy3 = screwRows(d.cy3.atoms, 0, d.twist, d.rise);
+    const cy5 = screwRows(d.cy5.atoms, n - 1, d.twist, d.rise);
+    const start3 = atoms.length;
+    const start5 = start3 + cy3.length;
+    atoms.push(...cy3, ...cy5);
+    const dipole = (rows, [i, j]) => ({ centre: centroid([rows[i][1], rows[j][1]]), dir: unit3(sub3(rows[j][1], rows[i][1])) });
+    const a = dipole(cy3, d.cy3.dipole);
+    const b = dipole(cy5, d.cy5.dipole);
+    const r = sub3(b.centre, a.centre);
+    const dist = Math.hypot(...r) / 10; // nm
+    const rh = unit3(r);
+    const kappa = dot3(a.dir, b.dir) - 3 * dot3(a.dir, rh) * dot3(b.dir, rh);
+    const k2 = kappa * kappa;
+    const angle = (Math.acos(Math.min(1, Math.abs(dot3(a.dir, b.dir)))) * 180) / Math.PI;
+    const fret = (R0) => 1 / (1 + (dist / R0) ** 6);
+    const e = fret(d.r0 * (k2 / (2 / 3)) ** (1 / 6));
+    const eIso = fret(d.r0);
+    const pct = (x) => `${(100 * x).toFixed(0)}%`;
+    return {
+      atoms,
+      sites: [
+        { label: 'Cy3', kind: 'dye', color: '#ffc23d', atoms: range(start3, cy3.length) },
+        { label: 'Cy5', kind: 'dye', color: '#ff3d4d', atoms: range(start5, cy5.length) },
+      ],
+      comment: `Cy3 | ${n} bp B-DNA | Cy5 | ${dist.toFixed(2)} nm, κ² = ${k2.toFixed(2)}, E = ${pct(e)} | ${d.method}`,
+      note:
+        `Cy3 ↔ Cy5: ${dist.toFixed(2)} nm, dipoles ${angle.toFixed(0)}° apart, κ² = ${k2.toFixed(2)}. ` +
+        `FRET ${pct(e)} stacked as drawn, ${pct(eIso)} if the dyes tumbled freely (κ² = 2/3; R₀ = ${d.r0} nm assumed).`,
+    };
+  },
+
   /**
    * One finished geometry per value of n, each built and optimised offline as a whole molecule
    * (e.g. dye –(C6H4)n– quencher from tools/build_selfheal.py). Each frame brings its own sites and notes.

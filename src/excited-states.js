@@ -22,7 +22,8 @@ export const STATE_SYMBOL = { S: 'S₁', T: 'T₁' };
  * yellow-green (it emits at 549 nm), a fluorescent protein mNeonGreen's green, and retinal a purple to set it apart.
  * A triplet quencher (e.g. COT on a self-healing dye) is pale when its singlet is on, which it barely ever is, and
  * magenta when it holds a triplet, so a triplet handed over from the dye stands out from the dye's own red.
- * Chlorophylls (in LHCII) glow leaf green.
+ * Chlorophylls glow leaf green; a carotenoid harvesting light orange (its triplet the quencher's magenta); a flavin
+ * (LOV domains, miniSOG) its green-yellow emission.
  */
 const KIND_COLOR = {
   sensitizer: { S: '#ff8a3d', T: '#ff5f2a' },
@@ -34,6 +35,8 @@ const KIND_COLOR = {
   retinal: { S: '#c65dff', T: '#ff3b2f' },
   quencher: { S: '#dfe6ff', T: '#ff3bd2' },
   chlorophyll: { S: '#46e04a', T: '#ff3b2f' },
+  carotenoid: { S: '#ffa630', T: '#ff3bd2' },
+  flavin: { S: '#c8ff3d', T: '#ff3b2f' },
 };
 
 /** Singlets keep a soft afterglow when they emit; triplets switch instantly so hops look fast. */
@@ -72,6 +75,7 @@ export class ExcitedStates {
       if (this.states.has(s.label)) continue;
       const st = defaultState(s.kind);
       st.S.on = Boolean(s.on); // an example can start lit, to show where its chromophore is
+      if (s.color) st.S.color = s.color; // a site can bring its own singlet colour (e.g. a red-emitting FP)
       this.states.set(s.label, st);
     }
   }

@@ -1,0 +1,521 @@
+[
+  {
+    "file": "dna-fret-ruler",
+    "name": "DNA FRET ruler: Cy3–Cy5",
+    "description": "Cy3 and Cy5 stacked on the two ends of a B-DNA duplex of n base pairs. FRET falls with distance, and wobbles as the helix turns the dyes against each other (κ²).",
+    "info": "### What it is\nTwo dyes on the ends of a DNA duplex: **Cy3** (the donor, absorbs ~550 nm, emits ~570 nm) and **Cy5** (the\nacceptor, absorbs ~650 nm, emits ~670 nm). Adding base pairs moves them apart by ~3.3 Å per pair, which\nmakes DNA the standard ruler for calibrating FRET.\n\n### The photophysics\nIn **Förster resonance energy transfer**, an excited donor hands its energy to a nearby acceptor through\nthe coupling of their transition dipoles, without emitting a photon. The efficiency is\nE = 1 / (1 + (r / R₀)⁶): it falls from ~100% to ~0% over about a factor of two in distance around the\nFörster radius R₀ (~5–6 nm for Cy3–Cy5).\n\nR₀⁶ is proportional to **κ²**, the orientation factor, κ = cos θ_DA − 3 cos θ_D cos θ_A. It runs from 0\n(dipoles at right angles) to 4 (in line). For dyes tumbling freely it averages to 2/3, the value almost\nevery FRET calculation assumes. But dyes stacked on the ends of a helix can't tumble: they turn with the\nDNA, ~36° per base pair, so κ² and the FRET efficiency oscillate as n changes, on top of the r⁶ decay.\nThat oscillation was measured for terminally stacked Cy3 and Cy5 (Iqbal et al. 2008).\n\n### Why it matters for imaging\nSingle-molecule FRET (smFRET) with Cy3/Cy5 measures distances and conformational changes of single\nproteins and nucleic acids. Its weak point is Cy5's photophysics: it blinks into its triplet and dark\nstates and bleaches. That is exactly why the self-healing Cy5–COT dyes were made (Self-healing dyes tab).\n\n### In this model\n- Move n and watch the panel note: distance, the angle between the two dipoles, κ², and E as drawn\n  versus E for freely tumbling dyes. Light Cy3 (S) and imagine half of that energy jumping to Cy5.\n- The DNA repeats the A5·T20 base pair of a real crystal structure (PDB 1BNA) with its own helical step.\n  That step is a little overwound (37.4° and 3.13 Å per pair, so ~9.6 pairs per turn instead of ~10.5),\n  so the κ² oscillation here repeats a bit faster than in real DNA. No H on the DNA.\n- The dyes are stacked 3.4 Å beyond the end pairs, turned to fit without clashes; their tethers to the 5′\n  phosphates aren't drawn. R₀ = 5.4 nm is an assumed typical value.\n- The dyes here are perfectly rigid, so κ² swings all the way between ~0 and ~1 (at 12 pairs FRET drops\n  to 13% where tumbling dyes would give 83%). Real stacked dyes wobble and sometimes unstack, which\n  averages κ² part of the way back toward 2/3: the measured oscillation is real but gentler.\n\nSources: Förster, Ann. Phys. 1948. Iqbal et al., PNAS 105, 11176 (2008). Drew et al., PNAS 78, 2179\n(1981) (PDB 1BNA). Altman et al., Nat. Methods 9, 68 (2012).",
+    "param": {
+      "data": "dna-fret-ruler.param.json",
+      "label": "Base pairs",
+      "symbol": "n",
+      "min": 4,
+      "max": 30,
+      "default": 10
+    }
+  },
+  {
+    "file": "aequorin.xyz",
+    "name": "Aequorin: calcium-triggered light (BRET to GFP)",
+    "description": "The jellyfish photoprotein that makes the blue light GFP turns green. Holds coelenterazine as a peroxide, ready to burst when Ca²⁺ binds. PDB 1EJ3.",
+    "info": "### What it is\nAequorin is the calcium-sensitive photoprotein of the jellyfish *Aequorea victoria*, the same animal GFP\ncomes from. It holds its substrate, **coelenterazine**, already activated with oxygen as a\n2-hydroperoxide (the glowing site here), and waits.\n\n### The photophysics\nThis is **chemiluminescence**: the excited state is made by a chemical reaction, not by light. When Ca²⁺\nbinds to aequorin's EF-hand sites, the protein changes shape and the peroxide attacks its own carbon,\nforming a strained four-membered dioxetanone. It falls apart into CO₂ and coelenteramide, and the\nenergy released leaves the coelenteramide in its singlet excited state. Alone, it emits blue light,\n~465 nm.\n\nIn the jellyfish it never gets the chance: GFP sits close to aequorin, and the excited coelenteramide\nhands its energy to GFP's chromophore by resonance transfer (**BRET**, bioluminescence resonance energy\ntransfer: FRET with a chemically made donor). GFP then emits green, ~509 nm. GFP's whole natural job is\nto be a BRET acceptor.\n\n### Why it matters for imaging\n- Aequorin was one of the first calcium indicators: light output directly reports Ca²⁺, with no\n  excitation light and so no background autofluorescence or phototoxicity.\n- BRET is the basis of luciferase-based sensors (e.g. NanoLuc fused to a fluorescent protein), which\n  read out interactions or Ca²⁺ without illumination.\n- Shimomura found both aequorin and GFP in the 1960s; GFP's Nobel Prize (2008) grew from this.\n\n### In this model\nCrystal structure PDB 1EJ3 (2.3 Å), protein drawn faint, coelenterazine-2-hydroperoxide with its H. There\nis no structure of the aequorin–GFP pair; GFP is in the Proteins tab.\n\nSources: Head et al., Nature 405, 372 (2000) (PDB 1EJ3). Shimomura, Johnson & Saiga, J. Cell. Comp.\nPhysiol. 59, 223 (1962).",
+    "surroundings": 1496,
+    "sites": [
+      {
+        "label": "Coelenterazine",
+        "kind": "dye",
+        "last": 55,
+        "color": "#4aa3ff",
+        "on": true
+      }
+    ]
+  },
+  {
+    "file": "lh2.xyz",
+    "name": "LH2: two rings of bacteriochlorophyll",
+    "description": "Purple-bacterial antenna: 9 subunit pairs holding a loose B800 ring and a tight B850 ring of bacteriochlorophyll a, with carotenoids spanning both. PDB 1NKZ.",
+    "info": "### What it is\nLight-harvesting complex 2 of the purple bacterium *Rhodoblastus* (formerly *Rhodopseudomonas*)\n*acidophilus*: nine pairs of small membrane helices (α and β) arranged in a ring, holding 27\nbacteriochlorophyll a (BChl) and 18 carotenoids (rhodopin glucoside).\n\n### The photophysics\nThe BChls form two rings named by where they absorb:\n- **B800**: 9 BChls lying flat, ~21 Å apart. Weakly coupled, they act roughly as separate molecules\n  and absorb at 800 nm.\n- **B850**: 18 BChls standing up, packed so tightly (~9 Å Mg to Mg; their rings 3.5 Å apart here) that\n  their excited states mix. The excitation is shared over several molecules at once (an **exciton**),\n  which lowers its energy and shifts the absorption from ~800 to 850 nm.\nEnergy flows downhill from B800 to B850 in under a picosecond, then on to the LH1 ring and the reaction\ncentre. B800 → B850 is Förster-like hopping; within B850 it's coherent sharing. Comparing the two rings\nshows when the simple point-dipole FRET picture works and when it fails.\n\nThe carotenoids touch both rings. They absorb blue-green light (their bright S₂ state) and pass it to\nthe BChls, and they take BChl triplets before those can make singlet oxygen: the same TTET trick as the\nself-healing dyes.\n\n### Why it matters for imaging\nExcitonic coupling is how dye aggregates (J- and H-aggregates) and some NIR imaging probes get their\nshifted, narrow, intense bands. LH2 is the textbook natural example.\n\n### In this model\nThe full ring from the PDB's biological assembly (the deposited file holds a third of it), protein\ndrawn faint, pigments with H. BChls are labelled by ring (B800 1-9, B850 α1-9 and β1-9, numbered around\nthe ring) and carotenoids 1-18. Three neighbouring B850 BChls start lit.\n\nSources: Papiz et al., J. Mol. Biol. 326, 1523 (2003) (PDB 1NKZ). McDermott et al., Nature 374, 517\n(1995).",
+    "surroundings": 6534,
+    "sites": [
+      {
+        "label": "B800 1",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 5764
+      },
+      {
+        "label": "B800 2",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 5624
+      },
+      {
+        "label": "B800 3",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 5484
+      },
+      {
+        "label": "B800 4",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 5344
+      },
+      {
+        "label": "B800 5",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 5204
+      },
+      {
+        "label": "B800 6",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 5064
+      },
+      {
+        "label": "B800 7",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 4924
+      },
+      {
+        "label": "B800 8",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 4784
+      },
+      {
+        "label": "B800 9",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 4644
+      },
+      {
+        "label": "B850 α1",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 4504,
+        "on": true
+      },
+      {
+        "label": "B850 α2",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 4364,
+        "on": true
+      },
+      {
+        "label": "B850 α3",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 4224
+      },
+      {
+        "label": "B850 α4",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 4084
+      },
+      {
+        "label": "B850 α5",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 3944
+      },
+      {
+        "label": "B850 α6",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 3804
+      },
+      {
+        "label": "B850 α7",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 3664
+      },
+      {
+        "label": "B850 α8",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 3524
+      },
+      {
+        "label": "B850 α9",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 3384
+      },
+      {
+        "label": "B850 β1",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 3244,
+        "on": true
+      },
+      {
+        "label": "B850 β2",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 3104
+      },
+      {
+        "label": "B850 β3",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 2964
+      },
+      {
+        "label": "B850 β4",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 2824
+      },
+      {
+        "label": "B850 β5",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 2684
+      },
+      {
+        "label": "B850 β6",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 2544
+      },
+      {
+        "label": "B850 β7",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 2404
+      },
+      {
+        "label": "B850 β8",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 2264
+      },
+      {
+        "label": "B850 β9",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 2124
+      },
+      {
+        "label": "Rhodopin glucoside 1",
+        "kind": "carotenoid",
+        "last": 55,
+        "skip": 2006
+      },
+      {
+        "label": "Rhodopin glucoside 2",
+        "kind": "carotenoid",
+        "last": 55,
+        "skip": 1888
+      },
+      {
+        "label": "Rhodopin glucoside 3",
+        "kind": "carotenoid",
+        "last": 55,
+        "skip": 1770
+      },
+      {
+        "label": "Rhodopin glucoside 4",
+        "kind": "carotenoid",
+        "last": 55,
+        "skip": 1652
+      },
+      {
+        "label": "Rhodopin glucoside 5",
+        "kind": "carotenoid",
+        "last": 55,
+        "skip": 1534
+      },
+      {
+        "label": "Rhodopin glucoside 6",
+        "kind": "carotenoid",
+        "last": 55,
+        "skip": 1416
+      },
+      {
+        "label": "Rhodopin glucoside 7",
+        "kind": "carotenoid",
+        "last": 55,
+        "skip": 1298
+      },
+      {
+        "label": "Rhodopin glucoside 8",
+        "kind": "carotenoid",
+        "last": 55,
+        "skip": 1180
+      },
+      {
+        "label": "Rhodopin glucoside 9",
+        "kind": "carotenoid",
+        "last": 55,
+        "skip": 1062
+      },
+      {
+        "label": "Rhodopin glucoside 10",
+        "kind": "carotenoid",
+        "last": 55,
+        "skip": 944
+      },
+      {
+        "label": "Rhodopin glucoside 11",
+        "kind": "carotenoid",
+        "last": 55,
+        "skip": 826
+      },
+      {
+        "label": "Rhodopin glucoside 12",
+        "kind": "carotenoid",
+        "last": 55,
+        "skip": 708
+      },
+      {
+        "label": "Rhodopin glucoside 13",
+        "kind": "carotenoid",
+        "last": 55,
+        "skip": 590
+      },
+      {
+        "label": "Rhodopin glucoside 14",
+        "kind": "carotenoid",
+        "last": 55,
+        "skip": 472
+      },
+      {
+        "label": "Rhodopin glucoside 15",
+        "kind": "carotenoid",
+        "last": 55,
+        "skip": 354
+      },
+      {
+        "label": "Rhodopin glucoside 16",
+        "kind": "carotenoid",
+        "last": 55,
+        "skip": 236
+      },
+      {
+        "label": "Rhodopin glucoside 17",
+        "kind": "carotenoid",
+        "last": 55,
+        "skip": 118
+      },
+      {
+        "label": "Rhodopin glucoside 18",
+        "kind": "carotenoid",
+        "last": 55
+      }
+    ]
+  },
+  {
+    "file": "pcp.xyz",
+    "name": "Peridinin–chlorophyll protein (PCP)",
+    "description": "Dinoflagellate antenna with four carotenoids (peridinin) per chlorophyll. Here the carotenoids are the light harvesters, not just the protection. PDB 1PPR.",
+    "info": "### What it is\nA water-soluble antenna protein of dinoflagellates (marine algae). Each monomer holds 8 peridinins and\n2 chlorophyll a, a 4 : 1 carotenoid-to-chlorophyll ratio, in a protein shell. This is chain M of the\ntrimer.\n\n### The photophysics\nIn the sea, red light is absorbed by the water within metres; what is left is blue-green, which\nchlorophyll absorbs poorly. Peridinin fills that gap: it absorbs strongly at ~470–550 nm and passes the\nenergy to chlorophyll, which emits at ~670 nm.\n\nThe catch, met with Self-healing JF525: a carotenoid's lowest singlet (S₁) is dark and usually short-lived,\nwhich makes it a poor energy donor. Peridinin is unusual: it carries a carbonyl in its conjugated chain,\nwhich gives its S₁ an **intramolecular charge-transfer (ICT)** character. That makes the S₁/ICT state\nmore strongly coupled to chlorophyll, so peridinin hands over most of its energy (roughly 90% overall).\nThe peridinins sit in direct contact with the chlorophylls (3.7 Å between conjugated atoms here), so\nthey also take chlorophyll triplets.\n\n### Why it matters for imaging\nIt shows that the \"quencher or harvester?\" question for a carotenoid next to a dye is decided by the\nsinglet energies and by coupling, and that a polar group in the chain changes the answer. The same\ncharge-transfer idea underlies push–pull dyes and solvatochromic probes.\n\n### In this model\nPDB 1PPR (2.0 Å), monomer M, protein drawn faint, pigments with H. Each peridinin's conjugated chain\nglows (orange); Peridinin 612, the one touching Chl a 601, starts lit.\n\nSources: Hofmann et al., Science 272, 1788 (1996) (PDB 1PPR). Polívka & Sundström, Chem. Rev. 104, 2021\n(2004).",
+    "surroundings": 2282,
+    "sites": [
+      {
+        "label": "Peridinin 611",
+        "kind": "carotenoid",
+        "last": 23,
+        "skip": 946
+      },
+      {
+        "label": "Peridinin 612",
+        "kind": "carotenoid",
+        "last": 23,
+        "skip": 850,
+        "on": true
+      },
+      {
+        "label": "Peridinin 613",
+        "kind": "carotenoid",
+        "last": 23,
+        "skip": 754
+      },
+      {
+        "label": "Peridinin 614",
+        "kind": "carotenoid",
+        "last": 23,
+        "skip": 658
+      },
+      {
+        "label": "Peridinin 621",
+        "kind": "carotenoid",
+        "last": 23,
+        "skip": 562
+      },
+      {
+        "label": "Peridinin 622",
+        "kind": "carotenoid",
+        "last": 23,
+        "skip": 466
+      },
+      {
+        "label": "Peridinin 623",
+        "kind": "carotenoid",
+        "last": 23,
+        "skip": 370
+      },
+      {
+        "label": "Peridinin 624",
+        "kind": "carotenoid",
+        "last": 23,
+        "skip": 274
+      },
+      {
+        "label": "Chl a 601",
+        "kind": "chlorophyll",
+        "last": 30,
+        "skip": 137
+      },
+      {
+        "label": "Chl a 602",
+        "kind": "chlorophyll",
+        "last": 30
+      }
+    ]
+  },
+  {
+    "file": "fmo.xyz",
+    "name": "FMO protein: an energy funnel",
+    "description": "Green-sulfur-bacterial antenna that wires the chlorosome to the reaction centre: 7 bacteriochlorophylls whose energies the protein tunes into a funnel. PDB 3EOJ, 1.3 Å.",
+    "info": "### What it is\nThe Fenna–Matthews–Olson protein of green sulfur bacteria (here *Prosthecochloris aestuarii*), the first\nchlorophyll protein whose structure was solved (1975). It is a trimer; each monomer holds 7\nbacteriochlorophyll a (an 8th, loosely bound one is seen in some crystals, not in this one) in a\nprotein \"taco shell\". It sits between the huge chlorosome antenna and the reaction centre.\n\n### The photophysics\nAll seven pigments are the same molecule, yet they absorb at different wavelengths (about 790–825 nm).\nThe protein tunes each one's **site energy** with nearby charges, hydrogen bonds and ring distortions.\nCombined with their couplings, this makes an **energy funnel**: excitation entering near the chlorosome\nside flows down through the network to the lowest-energy pigments, next to the reaction centre, in a few\npicoseconds.\n\nFMO is also famous for the **quantum coherence** debate. In 2007, two-dimensional electronic\nspectroscopy saw oscillations (\"quantum beats\") lasting hundreds of femtoseconds, read as energy moving\nas a wave. Later work attributes the long-lived beats mainly to vibrations of the pigments. Electronic\ncoherence between excitons is real but short-lived, and transport is well described as fast hopping\nbetween partly delocalised states.\n\n### Why it matters for imaging\nThe same molecule shows different colours in different protein pockets. That is how fluorescent proteins\nare tuned too: the chromophore stays the same and its surroundings shift its colour.\n\n### In this model\nPDB 3EOJ at 1.3 Å, the sharpest structure in this tab (compare LHCII at 2.72 Å). Protein drawn faint;\nthe BChls with H are labelled by PDB residue number (371–377). The literature numbers them BChl 1–7.\n\nSources: Tronrud et al., Photosynth. Res. 100, 79 (2009) (PDB 3EOJ). Fenna & Matthews, Nature 258, 573\n(1975). Engel et al., Nature 446, 782 (2007).",
+    "surroundings": 2742,
+    "sites": [
+      {
+        "label": "BChl 371",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 790
+      },
+      {
+        "label": "BChl 372",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 650
+      },
+      {
+        "label": "BChl 373",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 510
+      },
+      {
+        "label": "BChl 374",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 370
+      },
+      {
+        "label": "BChl 375",
+        "kind": "chlorophyll",
+        "last": 32,
+        "skip": 230
+      },
+      {
+        "label": "BChl 376",
+        "kind": "chlorophyll",
+        "last": 29,
+        "skip": 104
+      },
+      {
+        "label": "BChl 377",
+        "kind": "chlorophyll",
+        "last": 26
+      }
+    ]
+  },
+  {
+    "file": "aslov2.xyz",
+    "name": "LOV2 domain: a triplet that makes a bond",
+    "description": "Plant blue-light sensor (oat phototropin LOV2). Its flavin's triplet bonds to a cysteine, and that covalent bond is the signal. Dark state, PDB 2V0U.",
+    "info": "### What it is\nThe LOV2 (Light, Oxygen, Voltage) domain of oat phototropin 1, a plant blue-light receptor. It binds a\nflavin mononucleotide (FMN) non-covalently, with a cysteine (Cys450) next to the flavin.\n\n### The photophysics\nBlue light (~450 nm) excites the flavin to S₁, which crosses efficiently to its **triplet** within\nnanoseconds. Usually a triplet is a liability (it makes singlet oxygen). Here the protein uses it:\nwithin microseconds the triplet reacts with the nearby cysteine (most likely by taking its hydrogen,\nthen the two radicals joining) to form a **covalent bond between the cysteine's sulfur and the flavin's\nC4a**. The adduct no longer\nabsorbs blue light or fluoresces (its absorption moves to ~390 nm). It holds for seconds to minutes, then\nbreaks thermally and the domain resets.\n\nThe adduct strains the protein and unwinds a helix (Jα) packed against it, which switches on the\nphototropin kinase: the photochemistry becomes a mechanical signal.\n\n### Why it matters for imaging\n- LOV domains are the core of many **optogenetic tools**: photoactivatable proteins, light-induced\n  dimerisers (iLID), LOV-based transcription switches. They work because the triplet makes a bond.\n- Remove the cysteine and the triplet has nowhere to go but oxygen: see miniSOG, next.\n- LOV-based fluorescent proteins (iLOV) emit green and work without oxygen to mature their chromophore.\n\n### In this model\nDark state, PDB 2V0U (1.4 Å), protein drawn faint, FMN with its H (only its conjugated isoalloxazine\nring glows). Cys450's sulfur has two conformations in the crystal, 4.5 Å (the one drawn) and 3.7 Å from\nthe flavin's C4a.\n\nSources: Halavaty & Moffat, Biochemistry 46, 14001 (2007) (PDB 2V0U). Swartz et al., J. Biol. Chem. 276,\n36493 (2001).",
+    "surroundings": 1186,
+    "sites": [
+      {
+        "label": "FMN",
+        "kind": "flavin",
+        "last": 52,
+        "on": true
+      }
+    ]
+  },
+  {
+    "file": "minisog.xyz",
+    "name": "miniSOG: a flavin built to make singlet oxygen",
+    "description": "An engineered LOV domain without its cysteine, so the flavin triplet passes its energy to O₂. Used to label cells for electron microscopy and to kill them with light. PDB 6GPU.",
+    "info": "### What it is\nminiSOG (mini Singlet Oxygen Generator) is a LOV domain from *Arabidopsis* phototropin 2, engineered so\nits flavin does the opposite of a self-healing dye: make as much singlet oxygen as possible. The key\nmutation replaces the adduct-forming cysteine with a glycine.\n\n### The photophysics\nBlue light → flavin S₁ → intersystem crossing to T₁, as in LOV2. With no cysteine to react with, the\ntriplet lives long enough (microseconds) for O₂ to reach it. **Triplet–triplet energy transfer to\noxygen** then makes **singlet oxygen** (¹O₂, ~0.98 eV above ground). It is the same TTET as COT taking a\ndye's triplet, except the acceptor is O₂ and the product is a reactive oxidant.\n\nHow much singlet oxygen is the interesting part. It was first reported at ~0.47 per photon absorbed,\nlater measured nearer ~0.03: the protein shell shields the flavin from O₂ and quenches its triplet. The\ncrystal-structure paper behind this model (\"Tailing miniSOG\") studies this complex photophysics,\nincluding how light alters the flavin while miniSOG works. Later variants (e.g. SOPP) reach much higher\nyields.\n\n### Why it matters for imaging\n- **Correlative light and electron microscopy**: singlet oxygen polymerises diaminobenzidine into an\n  electron-dense stain exactly where miniSOG is, so a genetically encoded tag shows up in the EM.\n- **CALI / photoablation**: kill or inactivate tagged proteins or cells with light.\n- The flip side of self-healing: every dye's triplet + O₂ makes some ¹O₂, which is the phototoxicity\n  that the COT conjugates and Gentle Rhodamines reduce.\n\n### In this model\nPDB 6GPU (1.17 Å), protein drawn faint, FMN with H. There is no cysteine by the flavin's C4a: the\nnearest residues here are Leu84 and Gly40.\n\nSources: Torra et al., Sci. Rep. 9, 2428 (2019) (PDB 6GPU). Shu et al., PLoS Biol. 9, e1001041 (2011).\nRuiz-González et al., J. Am. Chem. Soc. 135, 9564 (2013).",
+    "surroundings": 932,
+    "sites": [
+      {
+        "label": "FMN",
+        "kind": "flavin",
+        "last": 52,
+        "on": true
+      }
+    ]
+  },
+  {
+    "file": "killerred.xyz",
+    "name": "KillerRed: a phototoxic fluorescent protein",
+    "description": "A red fluorescent protein that makes reactive oxygen under green light, through a water-filled channel to its chromophore. PDB 2WIQ.",
+    "info": "### What it is\nKillerRed is a red fluorescent protein (excitation ~585 nm, emission ~610 nm) evolved from a hydrozoan\nchromoprotein for phototoxicity. It is far more phototoxic than other fluorescent proteins.\n\n### The photophysics\nMost fluorescent proteins wrap their chromophore tightly in an 11-stranded β-barrel, which keeps oxygen\nand water away and makes them bright and photostable. KillerRed's barrel has a **water-filled channel**\nrunning from the outside to the chromophore. Under green light, the excited chromophore (its singlet, and\na triplet or radical formed from it) transfers an electron to O₂ arriving through the channel, making\nmainly **superoxide** (type I photosensitisation) rather than singlet oxygen. The same photochemistry\nbleaches KillerRed as it works.\n\nCompare miniSOG, whose flavin makes singlet oxygen by energy transfer (type II). Two different routes\nfrom an excited chromophore to damage, and either can be engineered in or out.\n\n### Why it matters for imaging\n- Light-controlled cell killing and chromophore-assisted light inactivation (CALI) of tagged proteins.\n- A lesson for every fluorescent-protein label: the barrel's job is to isolate the chromophore, and a\n  leaky barrel means phototoxicity and bleaching.\n\n### In this model\nPDB 2WIQ (2.0 Å), protein drawn faint. The chromophore is made from Gln65–Tyr66–Gly67 (a DsRed-type red\nchromophore) and is part of the protein chain; its H were placed using its peptide bonds. Waters are\nnot drawn, so the channel shows as a gap in the barrel wall.\n\nSources: Carpentier et al., FEBS Lett. 583, 2839 (2009) (PDB 2WIQ). Bulina et al., Nat. Biotechnol. 24,\n95 (2006).",
+    "surroundings": 1765,
+    "sites": [
+      {
+        "label": "Chromophore",
+        "kind": "fp",
+        "last": 38,
+        "color": "#ff5a4a",
+        "on": true
+      }
+    ]
+  },
+  {
+    "file": "jf525-open.xyz",
+    "name": "JF525, open: the fluorescent zwitterion",
+    "description": "Janelia Fluor 525 in its open form: a flat xanthene conjugated end to end, absorbing at 525 nm. Compare the closed spirolactone next.",
+    "info": "### What it is\nJanelia Fluor 525, a rhodamine with 3,3-difluoroazetidine groups instead of dimethylamines. This is its\n**open zwitterion**: positive iminium on the xanthene, negative carboxylate on the pendant ring.\n\n### The photophysics\nRhodamines live in an equilibrium between two forms:\n- **open** (this one): the xanthene's central carbon (C9) is sp², so the π system runs across all three\n  rings from one nitrogen to the other. Absorbs at 525 nm, emits at 549 nm, bright.\n- **closed spirolactone** (next entry): the carboxylate attacks C9, making it sp³. That breaks the π\n  system into two separate aminophenyl halves, which absorb only in the UV. Colourless, not fluorescent.\nThe balance is the lactone–zwitterion constant, K_L–Z. Polar, protic surroundings favour the open form;\nnonpolar ones favour the closed one.\n\nThe azetidines matter twice. The small, strained rings resist twisting, which suppresses a twisted\ncharge-transfer (TICT) decay path and makes the dye brighter than TMR. The fluorines pull electron\ndensity away from the nitrogens, which blue-shifts the dye (JF549 → JF525) and pushes K_L–Z toward the\nclosed form.\n\n### Why it matters for imaging\n- **Fluorogenicity**: tune K_L–Z so the dye stays mostly closed (and invisible) free in the cell, then\n  opens and lights up when bound to its target, such as HaloTag. That gives less background without\n  washing.\n- The closed, uncharged form also crosses membranes more easily, which helps cell permeability.\n- This is the dye in the Voltron525 and HaloTag models (Proteins tab).\n\n### In this model\nRDKit + MMFF94s geometry. The glow sits across the xanthene, end to end.\n\nSources: Grimm et al., Nat. Methods 12, 244 (2015); Grimm et al., Nat. Methods 14, 987 (2017).",
+    "sites": [
+      {
+        "label": "JF525 (open)",
+        "kind": "dye",
+        "last": 56,
+        "on": true
+      }
+    ]
+  },
+  {
+    "file": "jf525-closed.xyz",
+    "name": "JF525, closed: the colourless spirolactone",
+    "description": "The same atoms as the open form, with the carboxylate bonded to C9. The xanthene's conjugation is broken in two, so it no longer absorbs visible light.",
+    "info": "### What it is\nJF525's other form: the carboxylate on the pendant ring has bonded to the xanthene's central carbon\n(C9), closing a five-membered lactone ring. Same atoms, same formula as the open form. It's an isomer,\nand the two interconvert in solution.\n\n### The photophysics\nMaking C9 sp³ cuts the π system in two. Each half is an aminophenyl ether, which absorbs only in the\nUV, so the closed form is **colourless and non-fluorescent**. C9 also turns the pendant ring\nperpendicular, so the molecule is no longer flat.\n\nWhich form wins depends on the surroundings (the lactone–zwitterion equilibrium, K_L–Z). Water and\nhydrogen bonding stabilise the charges of the open form; membranes, nonpolar pockets and aggregation\nfavour the closed form. Binding to a protein like HaloTag can pull the equilibrium open, and the dye\nturns on.\n\n### Why it matters for imaging\n- **Fluorogenic labels** (JF dyes, MaP dyes, SiR): background stays dark until the dye binds.\n- **Spontaneous blinking** for super-resolution (e.g. HMSiR) uses a similar ring opening and closing,\n  tuned so only a few molecules are open at any moment.\n- Cell permeability: the neutral closed form crosses membranes.\n\n### In this model\nRDKit + MMFF94s geometry of the spirolactone, drawn from the open form's structure. Compare the glows.\nIn the open form it sits across the xanthene, and the pendant ring stays dark. Here C9 is dark, and the\nglow spreads over three separate pieces: both aminophenyl halves and the lactone ring. With the π system\ncut, no single chromophore is left, and the simple Hückel picture behind the glow shares the excitation\namong pieces of similar energy, each of which would only absorb in the UV.\n\nSources: Grimm et al., Nat. Methods 14, 987 (2017). Lukinavičius et al., Nat. Chem. 5, 132 (2013).",
+    "sites": [
+      {
+        "label": "JF525 (closed)",
+        "kind": "dye",
+        "last": 56,
+        "on": true
+      }
+    ]
+  },
+  {
+    "file": "gcamp6m.xyz",
+    "name": "GCaMP6m: a calcium sensor that switches a proton",
+    "description": "Circularly permuted GFP fused to calmodulin and its binding peptide. Calcium binding closes a gap in the barrel and turns the chromophore bright. PDB 3WLD.",
+    "info": "### What it is\nGCaMP6m, the calcium indicator behind most neuronal imaging: a **circularly permuted EGFP** (its ends\nmoved to the middle of the barrel) with **calmodulin** (CaM) on one side and the **M13 peptide** that\nCaM grabs on the other.\n\n### The photophysics\nThe chromophore (Thr65-Tyr66-Gly67, made by the protein itself) has two forms, set by the proton on its\nphenol:\n- **protonated (neutral)**: absorbs ~400 nm, barely excited by the usual 488 nm laser, dim;\n- **deprotonated (anionic)**: absorbs ~490 nm, bright green emission at ~510 nm.\nCircular permutation leaves an opening in the barrel right next to the phenol. Without Ca²⁺, water gets\nin and the chromophore stays mostly protonated, so it's dim. When Ca²⁺ binds, CaM wraps the M13 peptide\nand the complex packs against that opening, sealing it and reorganising the hydrogen bonds. The\nchromophore's pKa drops, it loses the proton, and the protein gets many times brighter.\n\nSo GCaMP doesn't change how its chromophore emits. It changes **which ground state is populated**: a\nground-state protonation equilibrium, the same idea as rhodamine's open/closed equilibrium.\n\n### Why it matters for imaging\nΔF/F from GCaMP is how most labs record neural activity. Its kinetics (rise and decay), affinity and\ndynamic range all come from this mechanism, and the GCaMP6/7/8 generations tuned the interfaces around\nthe chromophore. Pair it in your head with Voltron (Proteins tab): a voltage sensor that works by FRET to\na rhodopsin instead.\n\n### In this model\nCa²⁺-bound GCaMP6m, PDB 3WLD (2.7 Å). Protein and the 4 Ca²⁺ ions drawn faint, the chromophore glowing.\nIt is part of the protein chain, and its H (drawn here with the phenol protonated, as the dictionary has\nit) were placed using its peptide bonds.\n\nSources: Ding et al., Sci. China Life Sci. 57, 269 (2014) (PDB 3WLD). Chen et al., Nature 499, 295\n(2013). Akerboom et al., J. Biol. Chem. 284, 6455 (2009).",
+    "surroundings": 3115,
+    "sites": [
+      {
+        "label": "Chromophore",
+        "kind": "fp",
+        "last": 37,
+        "on": true
+      }
+    ]
+  }
+]

@@ -163,7 +163,7 @@ while a trajectory plays.
 
 ## Examples
 
-Tabs (Basics, Triplet molecules, Self-healing dyes, Xanthenes, Cyanines, Other dyes, Proteins, TTA upconversion, TADF, and two review tabs), all bundled into the app.
+Tabs (Basics, Triplet molecules, Self-healing dyes, Interesting photophysics, Xanthenes, Cyanines, Other dyes, Proteins, TTA upconversion, TADF, and two review tabs), all bundled into the app.
 `↑` / `↓` steps through the current tab.
 
 - **Basics** (`samples/basics/`): idealised geometries from `tools/make_samples.py` (`npm run samples`).
@@ -291,6 +291,38 @@ What the rigid rod changes, as estimates rather than results:
 - **Conjugation shifts the levels.** Fusing or conjugating rings onto COT raises its T₁ (El Bakouri et al., *Chem.
   Sci.* 2025), and an aryl on C5 red-shifts Cy5 somewhat. Both narrow the gaps the design relies on; Cy5's T₁ (1.60 eV)
   still clears COT's (0.95–1.1 eV) with room to spare.
+
+### Interesting photophysics
+
+Systems that each teach one piece of photophysics. Every entry has an **About this molecule** panel (under the
+examples list, collapsible like the other sections): what it is, the photophysics, why it matters for imaging, what
+the model shows, and sources. The text is the entry's `info` in `tools/catalog_photophysics.py`, written in a small
+Markdown subset (`### ` headings, `- ` lists with indented continuation lines, `**bold**`, `*italic*`, a small
+"Sources:" paragraph). Any catalog entry can carry `info`.
+
+- **Energy transfer**: *DNA FRET ruler: Cy3–Cy5* (parametric, 4–30 base pairs; the panel note gives the distance,
+  the angle between the dyes' transition dipoles, κ², and FRET as drawn vs for tumbling dyes) and *Aequorin*
+  (calcium-triggered chemiluminescence, BRET to GFP; 1EJ3).
+- **Light harvesting**: *LH2* (the full 9-fold ring from the PDB's biological assembly: B800 and B850 rings of
+  bacteriochlorophyll, 18 carotenoids; 1NKZ), *PCP* (peridinin–chlorophyll protein, carotenoids as the harvesters;
+  1PPR) and *FMO* (an energy funnel of 7 BChl a at 1.3 Å; 3EOJ).
+- **Triplets put to work**: *LOV2* (the flavin triplet bonds to a cysteine; 2V0U), *miniSOG* (no cysteine, so the
+  triplet makes singlet oxygen; 6GPU) and *KillerRed* (a fluorescent protein with a channel to its chromophore that
+  makes superoxide; 2WIQ).
+- **Fluorogenicity and sensing**: *JF525 open* and *closed* (the zwitterion and its colourless spirolactone) and
+  *GCaMP6m* (a calcium sensor that works by switching the chromophore's proton; 3WLD).
+
+Protein entries are built by `tools/build_cofactors.py` from a catalog `cofactors` dict: the protein drawn faint,
+each photoactive cofactor a site with its H restored from the PDB Chemical Component Dictionary (H the dictionary
+marks as leaving when a residue joins the chain are skipped, and a chromophore's peptide bonds aim its H). Sites
+can bring their own glow colour (`color`); new kinds `carotenoid` (orange, magenta triplet) and `flavin`. The
+Self-healing dye simulation uses a `carotenoid` site as the quencher when there is no `quencher`.
+
+The FRET ruler comes from `tools/build_fret.py`: the A5·T20 base pair of the Dickerson dodecamer (1BNA) and the
+helical screw that carries it onto the next pair (37.4°, 3.13 Å; joined O3′–P 1.75–1.85 Å vs 1.60 real), stacked by
+the `helix` builder in `src/parametric.js`. Cy3 and Cy5 (non-sulfonated, tethers not drawn) are stacked 3.4 Å
+beyond the end pairs, each turned and slid (≤ 2 Å) to fit the DNA it meets (closest heavy atoms 2.5 and 3.1 Å),
+then locked to its end pair. R₀ = 5.4 nm is assumed.
 
 ### Molecules from papers
 

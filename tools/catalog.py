@@ -13,6 +13,10 @@ Each entry:
     site     - (optional) named chromophore: {label, kind, last, skip, on}. It is the file's last `last` atoms, leaving
                out the final `skip`, and starts in its singlet if `on`
     sites    - (optional) several of those
+    info     - (optional) text for the app's "About this molecule" panel: blank-line-separated paragraphs, "### Heading",
+               "- " list lines, **bold**, *italic*; a paragraph starting "Sources:" is set small
+    cofactors - (optional) a protein (or bare pigments) from the PDB with its cofactors as sites, H added to the
+               cofactors; see tools/build_cofactors.py
     blocks   - (optional) named chromophores of a SMILES molecule: [{label, kind, smarts | smiles, on}]. Each must
                match once; its atoms (with their H) are moved to the end of the file and become a site. One block may
                leave out smarts/smiles: it takes every other atom. Otherwise leftover atoms (a linker) are no site
@@ -22,6 +26,7 @@ Each entry:
 Counter-ions (Na+, K+, Cl-, Br-) are dropped: the coloured/fluorescent species is drawn.
 """
 
+from catalog_photophysics import PHOTOPHYSICS as _PHOTOPHYSICS
 from catalog_uji2026 import EMITTERS as _UC_EMITTERS
 from catalog_uji2026 import SENSITIZERS as _UC_SENSITIZERS
 
@@ -29,6 +34,7 @@ TABS = [
     ("basics", "Basics"),
     ("triplet", "Triplet molecules"),
     ("selfheal", "Self-healing dyes"),
+    ("photophysics", "Interesting photophysics"),
     ("xanthenes", "Xanthenes"),
     ("cyanines", "Cyanines"),
     ("dyes", "Other dyes"),
@@ -297,6 +303,7 @@ MOLECULES = {
              cid=118528399),
     ],
     # ------------------------------------------------------------------ Uji & Yanai 2026 review (catalog_uji2026.py)
+    "photophysics": _PHOTOPHYSICS,
     "uc-sens": _UC_SENSITIZERS,
     "uc-emit": _UC_EMITTERS,
 }

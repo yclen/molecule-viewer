@@ -39,7 +39,7 @@ def _element(line):
 
 
 def _ccd(text):
-    """Atoms {name: (element, charge)} and bonds [(name1, name2, order, metal)] of a Chemical Component Dictionary
+    """Atoms {name: (element, charge, leaving)} and bonds [(name1, name2, order, metal)] of a Chemical Component Dictionary
     mmCIF entry."""
     lines = text.splitlines()
 
@@ -55,7 +55,8 @@ def _ccd(text):
             i += 1
         return rows
 
-    atoms = {r["atom_id"]: (r["type_symbol"].capitalize(), int(r["charge"])) for r in loop("_chem_comp_atom.")}
+    atoms = {r["atom_id"]: (r["type_symbol"].capitalize(), int(r["charge"]), r.get("pdbx_leaving_atom_flag") == "Y")
+             for r in loop("_chem_comp_atom.")}
     bonds = [(r["atom_id_1"], r["atom_id_2"], r["value_order"], r.get("pdbx_metal_coordination_flag") == "Y")
              for r in loop("_chem_comp_bond.")]
     return atoms, bonds
@@ -64,13 +65,17 @@ def _ccd(text):
 ORDER = {"SING": Chem.BondType.SINGLE, "DOUB": Chem.BondType.DOUBLE, "TRIP": Chem.BondType.TRIPLE}
 
 
-def with_hydrogens(atoms, ccd_text):
-    """Crystal heavy atoms [(name, element, xyz)] -> the same, then their H: [(name, element, xyz, parent or None)]."""
+def with_hydrogens(atoms, ccd_text, anchors=()):
+    """Crystal heavy atoms [(name, element, xyz)] -> the same, then their H: [(name, element, xyz, parent or None)].
+
+    H marked as leaving in the dictionary (lost when the residue joins a chain, e.g. a chromophore's N-terminal H2)
+    are not added. anchors: [(atom name, element, xyz)] atoms outside the residue bonded to it (the peptide C and N
+    of the neighbouring residues), used only to aim the H and then dropped."""
     ref_atoms, ref_bonds = _ccd(ccd_text)
     n_h = {}
     for a, b, _, _ in ref_bonds:
         for x, y in ((a, b), (b, a)):
-            if ref_atoms[y][0] == "H":
+            if ref_atoms[y][0] == "H" and not ref_atoms[y][2]:
                 n_h[x] = n_h.get(x, 0) + 1
     idx = {name: i for i, (name, _, _) in enumerate(atoms)}
     unknown = [name for name in idx if name not in ref_atoms]
@@ -85,15 +90,23 @@ def with_hydrogens(atoms, ccd_text):
     for a, b, order, metal in ref_bonds:
         if not metal and a in idx and b in idx:
             mol.AddBond(idx[a], idx[b], ORDER[order])
-    conf = Chem.Conformer(len(atoms))
-    for i, (_, _, p) in enumerate(atoms):
+    extra = []
+    for name, element, p in anchors:
+        a = Chem.Atom(element)
+        a.SetNoImplicit(True)
+        k = mol.AddAtom(a)
+        mol.AddBond(idx[name], k, Chem.BondType.SINGLE)
+        extra.append(p)
+    conf = Chem.Conformer(mol.GetNumAtoms())
+    for i, p in enumerate([p for _, _, p in atoms] + extra):
         conf.SetAtomPosition(i, Point3D(*p))
     mol.AddConformer(conf)
-    Chem.SanitizeMol(mol)
+    Chem.SanitizeMol(mol, Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_PROPERTIES)
     mol = Chem.AddHs(mol, addCoords=True)
     pos = mol.GetConformer().GetPositions()
+    first_h = len(atoms) + len(extra)
     out = [(name, element, tuple(p), None) for name, element, p in atoms]
-    for a in list(mol.GetAtoms())[len(atoms):]:
+    for a in list(mol.GetAtoms())[first_h:]:
         out.append((f"H{a.GetIdx()}", "H", tuple(pos[a.GetIdx()]), a.GetNeighbors()[0].GetIdx()))
     return out
 

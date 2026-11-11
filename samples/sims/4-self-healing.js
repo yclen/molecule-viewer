@@ -30,7 +30,7 @@ const tauS = 0.3; // the dye's singlet lifetime, s (mean)
 // In LHCII (14 chlorophylls, 4 carotenoids) it follows Chl a610, the lowest-energy chlorophyll, and Lutein 620 next to it
 const chls = sites('chlorophyll');
 const dye = sites('dye')[0] ?? (chls.includes('Chl a610') ? 'Chl a610' : chls[0]) ?? sites('emitter')[0] ?? sites()[0];
-const quencher = sites('quencher')[0];
+const quencher = sites('quencher')[0] ?? sites('carotenoid')[0];
 if (!quencher) log(`No quencher on this molecule: ${dye} blinks and bleaches on its own.`);
 
 const ground = (site) => !isOn(site, '*');

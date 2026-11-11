@@ -27,6 +27,7 @@ from rdkit.Chem.MolStandardize import rdMolStandardize
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_halotag import build_conjugate  # noqa: E402
+from build_cofactors import build_cofactors  # noqa: E402
 from build_lhcii import build_lhcii  # noqa: E402
 from build_membrane import build_membrane  # noqa: E402
 from build_voltron import build_fusion, halo_domain, mneon_domain  # noqa: E402
@@ -515,6 +516,8 @@ def main():
 
         for entry in MOLECULES[tab]:
             index.append({"file": entry["file"], "name": entry["name"], "description": entry["desc"]})
+            if "info" in entry:  # the About panel's text (see the catalog's docstring)
+                index[-1]["info"] = entry["info"]
             if "site" in entry:  # a named chromophore: the last `last` atoms of the file
                 index[-1]["sites"] = [entry["site"]]
             if "sites" in entry:
@@ -527,7 +530,7 @@ def main():
                     index[-1]["sensitizers"] = entry["sensitizers"]
                 continue
             if args.only and args.only not in entry["file"]:
-                generated = ("surroundings", "keepAxes") + (("sites",) if "photosystem" in entry else ())
+                generated = ("surroundings", "keepAxes") + (("sites",) if {"photosystem", "cofactors"} & set(entry) else ())
                 for key in generated:
                     if key in old_index.get(entry["file"], {}):
                         index[-1][key] = old_index[entry["file"]][key]
@@ -549,6 +552,31 @@ def main():
                 report += [f"### {entry['name']}", "", f"- Source: {comment.split(' | ', 1)[1]}",
                            f"- {len(symbols)} atoms, of which {len(built['symbols'])} lipid", ""]
                 summary.append((entry["name"], len(symbols), "model + MD lipids", 0, "-"))
+                continue
+
+            if "cofactors" in entry:  # a protein with its photoactive cofactors as sites, see tools/build_cofactors.py
+                cf = entry["cofactors"]
+                name = f"{cf['pdb']}.pdb{cf['assembly']}" if cf.get("assembly") else f"{cf['pdb']}.pdb"
+                text = fetch(f"https://files.rcsb.org/download/{name}", CACHE / "pdb" / name)
+
+                def ccd(code):
+                    return fetch(f"https://files.rcsb.org/ligands/download/{code}.cif", CACHE / "ccd" / f"{code}.cif")
+                built = build_cofactors(text, ccd, cf)
+                comment = f"{entry['name']} | {built['method']}"
+                (out_dir / entry["file"]).write_text(xyz_text(built["symbols"], built["coords"], comment), "utf-8")
+                index[-1]["sites"] = built["sites"]
+                if built["surroundings"]:
+                    index[-1]["surroundings"] = built["surroundings"]
+                close = "; ".join(f"{a}–{b} {d} Å" for d, a, b in built["contacts"][:4])
+                print(f"{len(built['symbols'])} atoms, {len(built['sites'])} sites, {built['links']} links"
+                      + (f" | closest: {close}" if close else ""))
+                report += [f"### {entry['name']}", "", f"- Source: {built['method']}",
+                           f"- {len(built['symbols'])} atoms; {len(built['sites'])} cofactor sites; covalent links to "
+                           f"the protein used to aim H: {built['links']}"]
+                if close:
+                    report.append(f"- Closest glowing atoms of different sites: {close}")
+                report += ["- Experimental coordinates, so no geometry check is applied.", ""]
+                summary.append((entry["name"], len(built["symbols"]), "X-ray", 0, "-"))
                 continue
 
             if "photosystem" in entry:  # pigments of a light-harvesting complex, see tools/build_lhcii.py

@@ -86,6 +86,7 @@ async function loadFile(file) {
     if (loadText(await file.text(), file.name)) {
       setActiveExample(null);
       setParamObject(null);
+      showAbout(null);
     }
   } catch (err) {
     toast(`Couldn't read ${file.name}: ${err.message}`);
@@ -107,6 +108,7 @@ function loadExample(tab, entry) {
   if (loadText(text, entry.name, namedSites(entry, text), key, view)) {
     setActiveExample(key);
     setParamObject(null);
+    showAbout(entry);
   }
 }
 
@@ -145,6 +147,7 @@ function loadParametric(tab, entry, value) {
   setActiveExample(key);
   setParamObject({ tab, entry }, value, built.note);
   showSensitizers(key, entry, built.attach);
+  showAbout(entry);
 }
 
 // ---------------------------------------------------------------------------
@@ -238,6 +241,70 @@ $('param-dec').addEventListener('click', () => setParamValue(curParam() - 1));
 $('param-inc').addEventListener('click', () => setParamValue(curParam() + 1));
 $('param-slider').addEventListener('input', (e) => setParamValue(e.target.value));
 $('param-input').addEventListener('change', (e) => setParamValue(e.target.value));
+
+// ---------------------------------------------------------------------------
+// About this molecule: an example's `info` text (from tools/catalog.py), a small subset of Markdown:
+// blank-line-separated blocks; "### Heading"; lines starting "- " make a list; **bold** and *italic* inline;
+// a block starting "Sources:" is set small. Everything else is escaped text.
+// ---------------------------------------------------------------------------
+
+const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const inline = (s) =>
+  escapeHtml(s)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*(?!\s)(.+?)\*/g, '$1<em>$2</em>');
+
+/**
+ * Within a block: "### " starts a heading line; "- " at the start of a line starts a list item, and the indented
+ * lines after it continue that item; any other unindented line is paragraph text (so a sentence can lead into a
+ * list, and text can follow one, without a blank line).
+ */
+function renderInfo(text) {
+  const out = [];
+  for (const block of text.replace(/\r/g, '').trim().split(/\n\s*\n/)) {
+    let para = [];
+    let items = null;
+    const flushPara = () => {
+      if (!para.length) return;
+      const cls = para[0].startsWith('Sources:') ? ' class="src"' : '';
+      out.push(`<p${cls}>${inline(para.join(' '))}</p>`);
+      para = [];
+    };
+    const flushList = () => {
+      if (!items) return;
+      out.push(`<ul>${items.map((it) => `<li>${inline(it.join(' '))}</li>`).join('')}</ul>`);
+      items = null;
+    };
+    for (const raw of block.split('\n')) {
+      const line = raw.trim();
+      if (!line) continue;
+      if (line.startsWith('### ')) {
+        flushPara();
+        flushList();
+        out.push(`<h4>${inline(line.slice(4))}</h4>`);
+      } else if (line.startsWith('- ')) {
+        flushPara();
+        (items ??= []).push([line.slice(2)]);
+      } else if (items && /^\s/.test(raw)) {
+        items[items.length - 1].push(line);
+      } else {
+        flushList();
+        para.push(line);
+      }
+    }
+    flushPara();
+    flushList();
+  }
+  return out.join('');
+}
+
+/** Show (or hide, for null / no info) the About panel for an example entry. */
+function showAbout(entry) {
+  const info = entry?.info;
+  $('about').hidden = !info;
+  $('about-body').innerHTML = info ? renderInfo(info) : '';
+  $('about-body').scrollTop = 0;
+}
 
 function setActiveExample(key) {
   examples.active = key;
