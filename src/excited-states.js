@@ -20,6 +20,9 @@ export const STATE_SYMBOL = { S: 'S₁', T: 'T₁' };
  * Starting colours by site kind. Singlets: warm for the sensitizer, blue for DPA mediators, cyan for the emitter.
  * Triplets are redder: the sensitizer's a slightly redder orange, DPA's and perylene's a full red. A dye is JF525's
  * yellow-green (it emits at 549 nm), a fluorescent protein mNeonGreen's green, and retinal a purple to set it apart.
+ * A triplet quencher (e.g. COT on a self-healing dye) is pale when its singlet is on, which it barely ever is, and
+ * magenta when it holds a triplet, so a triplet handed over from the dye stands out from the dye's own red.
+ * Chlorophylls (in LHCII) glow leaf green.
  */
 const KIND_COLOR = {
   sensitizer: { S: '#ff8a3d', T: '#ff5f2a' },
@@ -29,6 +32,8 @@ const KIND_COLOR = {
   dye: { S: '#b4ff3a', T: '#ff3b2f' },
   fp: { S: '#3dff8a', T: '#ff3b2f' },
   retinal: { S: '#c65dff', T: '#ff3b2f' },
+  quencher: { S: '#dfe6ff', T: '#ff3bd2' },
+  chlorophyll: { S: '#46e04a', T: '#ff3b2f' },
 };
 
 /** Singlets keep a soft afterglow when they emit; triplets switch instantly so hops look fast. */

@@ -69,7 +69,8 @@ each name switch the two states on and off, `E` / `T` toggle the selected molecu
 changing n keeps DPA 1's states, and switching to another example and back restores them.
 
 Default colours: singlets are sensitizer orange, DPA blue and perylene cyan. Triplets are redder: the
-sensitizer's a slightly redder orange, DPA's and perylene's red. Singlets have a 0.25 s afterglow. Triplets have
+sensitizer's a slightly redder orange, DPA's and perylene's red. A dye glows yellow-green with a red triplet, and a
+triplet quencher (COT, a carotenoid) magenta when it holds a triplet, and a chlorophyll leaf green. Singlets have a 0.25 s afterglow. Triplets have
 none: their glow appears and vanishes in the same frame, so a hopping triplet leaves no trail. Both states glow over the same atoms (S₁ and T₁
 come from the same HOMO→LUMO pair). In dev builds `__setOn('DPA 2', true, 'T')` drives it from the console.
 
@@ -122,7 +123,7 @@ onExcite('Sensitizer', () => decay('Sensitizer', tau));
   `pause()` stops the clock.
 
 The presets are in `samples/sims/` (the first comment line is the name): **Walk along the molecule**,
-**Random sensitizer excitation**, and **TTA cascade**. TTA cascade runs on TTA Flora 4 and follows the same 10
+**Random sensitizer excitation**, **TTA cascade** and **Self-healing dye** (below). TTA cascade runs on TTA Flora 4 and follows the same 10
 rules as the standalone simulation in `sim/` (listed in `sim/README.md`, as equations in `sim/formulas.md`), on one
 molecule under steady light. Every site is in its ground state, T₁ or S₁, never two at once:
 
@@ -143,6 +144,13 @@ molecule under steady light. Every site is in its ground state, T₁ or S₁, ne
 
 `kExc`, `kISC`, `tripletYield`, `kHop`, `kDecay`, `f` and `fretRadius` are sliders. The counters show each kind of
 event, and photons per excitation counts all photons (DPAs and perylene) per sensitizer excitation, as `sim/` does.
+**Self-healing dye** runs on a dye–quencher molecule from the Self-healing dyes tab (or on any dye, without the
+quencher). On LHCII it follows Chl a610 and Lutein 620, the pair in contact. The dye cycles ground → S₁ → photon; with chance `iscYield` its S₁ crosses to T₁ instead, and the dye is
+dark until the triplet leaves. It leaves on its own (`kT`), by bleaching the dye (`kBleach`, after which a fresh
+molecule takes over), or by triplet–triplet energy transfer to the quencher (`kTET`, only while the quencher is in its
+ground state), whose triplet then relaxes at `kQ`. The counters show the share of time spent dark and the photons
+per molecule before it bleaches. Set `kTET` to its minimum to see the dye without its quencher.
+
 Edits are saved in the browser per script, and **Revert** goes back to the preset. Errors stop the run and
 show the message (an unknown site, an `every(0)`, or handlers that keep switching each other). Changing the
 molecule, or n, resets the run.
@@ -155,7 +163,7 @@ while a trajectory plays.
 
 ## Examples
 
-Tabs (Basics, Triplet molecules, Xanthenes, Cyanines, Other dyes, Proteins, TTA upconversion, TADF, and two review tabs), all bundled into the app.
+Tabs (Basics, Triplet molecules, Self-healing dyes, Xanthenes, Cyanines, Other dyes, Proteins, TTA upconversion, TADF, and two review tabs), all bundled into the app.
 `↑` / `↓` steps through the current tab.
 
 - **Basics** (`samples/basics/`): idealised geometries from `tools/make_samples.py` (`npm run samples`).
@@ -206,6 +214,83 @@ self-consistent with its neighbours. The app (`src/parametric.js`) just stacks c
 checks assembled wires: bond lengths in range, correct formula, and freely re-minimising an assembled wire moves
 it by only ~0.01 Å RMSD. TTA Flora 4 reuses the same wire and adds two end groups from `tools/build_triplet.py` (`npm run triplet`): each gets its own conformer search, is attached where a wire linker would sit, and is relaxed against the fixed wire. To add a new object, give it a `param` entry in `tools/catalog.py` and a builder
 in `src/parametric.js`.
+
+### Self-healing dyes
+
+A fluorescent dye with a triplet quencher bonded to it. The quencher's T₁ sits below the dye's T₁, so the dye's
+triplet (a dark, reactive state: blinking, singlet oxygen, bleaching) drains into it by triplet–triplet energy transfer
+(TTET), and its S₁ sits far above the dye's S₁, so the dye's fluorescence is left alone. Cyclooctatetraene (COT) is
+the standard quencher: its T₁ relaxes to ~0.95 eV by flattening (Baird aromatic), its S₁ is ~4 eV and dark, and its
+triplet drops back to the ground state. Cy5's T₁ is 1.60 eV and its S₁ 1.9 eV. Built with `blocks` in
+`tools/catalog.py`, so the dye and the COT are separate sites.
+
+- **Cy5–COT (Altman 2012)**: COT on a flexible tether from an indolenine nitrogen (Altman et al., *Nat. Methods* 9,
+  68, 2012). TTET happens when the tether lets the two touch: Cy5's triplet lifetime falls from 63 µs to 1.1 µs with
+  the shortest tether and 13 µs with a 13-atom one (Zheng et al., *J. Phys. Chem. Lett.* 3, 2200, 2012), and the
+  photon budget rises up to ~70× without oxygen. The paper's 12-atom linker is in an SI figure we could not read, so
+  the tether drawn here (hexanoyl amide to aminomethyl-COT) is illustrative.
+- **Gentle Rhodamine GR555-mito**: TMR with COT esterified onto the pendant ring's carboxyl, COT–CH₂–O–C(=O)–Ar
+  (Liu et al., *ACS Cent. Sci.* 10, 1933, 2024). Ten times less singlet oxygen and 4–5× less phototoxicity.
+- **LHCII: chlorophylls + carotenoids (1RWT)**: nature's version, from the X-ray structure of spinach
+  light-harvesting complex II (Liu et al., *Nature* 428, 287, 2004), chain A: 14 chlorophylls (8 a, 6 b) and 4
+  carotenoids (2 lutein, violaxanthin, neoxanthin) in one protein, drawn faint (`tools/build_lhcii.py`;
+  waters/lipids/detergent removed). X-ray maps at 2.72 Å can't see hydrogens (one electron each), so the deposited
+  model has none; the pigments get theirs back from the PDB Chemical Component Dictionary (each atom's bonds, bond
+  orders and H count, matched by atom name), placed by RDKit on the measured heavy atoms. Phytol atoms too disordered
+  to be in the crystal stay out. The faint protein keeps no H, like the other proteins. Chlorophylls are chlorins (porphyrins with one ring reduced) with Mg in the middle
+  and a phytol tail. Their triplet yield is high (~60% for Chl a in solution), and their triplets would make singlet oxygen; the carotenoids
+  take them by TTET within nanoseconds (carotenoid T₁ ~0.9 eV is below chlorophyll's ~1.3 eV) and lose the energy as
+  heat. There is no linker: the protein holds each lutein in van der Waals contact with the chlorophylls it guards
+  (Lutein 620: Chl a610 3.6 Å, a612 3.7 Å; Lutein 621: Chl a602 3.4 Å, a603 3.7 Å, closest conjugated atoms), which
+  is the Dexter overlap TTET needs. Each pigment is a site, but only its conjugated part glows: the macrocycle (Mg,
+  4 N, 20 C) or the polyene chain. Chl a610, the lowest-energy chlorophyll and the main triplet donor, starts lit.
+  Carotenoids also harvest light the other way (their S₂ absorbs blue-green and passes the energy to chlorophyll).
+- **Chlorophyll + carotenoid pair (Chl a610 + Lutein 620)**: the same two pigments on their own, cut out of 1RWT at
+  their crystal positions with the protein and everything else removed (whole molecules, phytol tail included, with their H: C55H72MgN4O5 and C40H56O2).
+  It is the bare donor–quencher pair to compare with the self-healing dyes: the lutein's polyene lies across the edge
+  of the chlorophyll's ring, 3.6 Å away, held there only by the protein that is no longer drawn.
+- **Cy5–(phenylene)n–COT (our design)**: a parametric object. COT sits on Cy5's benzo ring at C5 (where sulfo-Cy5
+  carries a sulfonate), at the end of a rigid rod of *n* 1,4-phenylenes, the linker of TTA Flora 4; *n* = 0 bonds COT
+  straight to the dye. The other indolenine keeps its sulfonate and hexanoic-acid handle. The literature search found
+  no published dye–phenylene–COT and no COT C–C bonded to a cyanine or rhodamine core (closest: COT on porphyrins,
+  Ostapko et al., *Chem. Eur. J.* 26, 16666, 2020). `tools/build_selfheal.py` searches the dye's conformers once and
+  keeps that pose for every *n*, so only the rod and the COT move with *n*; each *n* is a finished geometry
+  (`frames` builder in `src/parametric.js`), checked in `docs/selfheal-report.md`.
+
+- **Self-healing JF525 (JF525–phenylene–carotenoid)**: our design, with the triplet quencher photosynthesis uses.
+  In light-harvesting complexes, carotenoids sit next to the chlorophylls and take their triplets before they make
+  singlet oxygen. Here JF525's pendant ring carries a 1,4-phenylene para to the xanthene (between the two carboxyls'
+  neighbours, so the lactone carboxyl and the HaloTag handle both stay), and the phenylene carries 7'-apo-β-carotene:
+  β-carotene cut at C7' and bonded there, all-trans. That aryl-ended carotenoid is the one Gust and Moore joined to
+  porphyrins in their carotenoporphyrin dyads. A normal catalog entry (RDKit + MMFF94s). The force field twists JF525's
+  ring and the phenylene 64° apart (a carboxyl is next door) and the phenylene and the polyene 42°; the molecule is
+  ~3 nm long.
+
+  Levels (approximate literature values, not measured on this molecule): β-carotene's T₁ is ~0.9 eV, far below a
+  rhodamine's (~1.8–2.0 eV; JF525's own is not reported that we know of), so the triplet condition holds easily. The
+  singlet condition does not: a carotenoid's lowest singlet is the dark S₁ (2¹Ag), ~1.8 eV for this conjugation
+  length, below JF525's S₁ (~2.3 eV, from 525 / 549 nm). Through the same bonds that carry TTET, JF525's singlet could
+  drop into it, so this version would probably be dim. In photosynthesis the gap is small because chlorophyll's S₁ is
+  low (~1.85 eV), and even there carotenoids can quench chlorophyll singlets; adding one conjugated C=C is enough to
+  turn a carotenoid into a singlet quencher (Berera et al., *PNAS* 103, 5343, 2006). Shortening the polyene raises S₁
+  (and T₁), so a shorter carotenoid is the version that could satisfy both conditions for JF525.
+
+What the rigid rod changes, as estimates rather than results:
+
+- **TTET goes through bonds, not by contact.** The rod holds the COT 1.5 Å (n = 0) to 18.7 Å (n = 4) from C5, so the
+  two can't touch. Through-bond triplet transfer falls off about e^(−0.45 Å⁻¹ · r) along conjugated bridges (Eng et al.,
+  *J. Phys. Chem. B* 110, 6483, 2006), so each phenylene (4.3 Å) costs ~7×: relative to n = 1, n = 2 is ~0.14× and
+  n = 3 ~0.02×. The flexible Cy5–COT reaches ~10⁶ s⁻¹; a rod has to beat that to be worth it, so n = 0 or 1 is the
+  range to test.
+- **The twists decouple.** In the force-field geometry each biaryl twists ~55° and the COT stands ~80° to the ring it
+  sits on, which keeps the dye's spectrum close to Cy5's but also weakens the coupling TTET needs.
+- **COT is an electron acceptor.** Calculations on COT bonded straight to dyes put a dye⁺/COT⁻ charge-transfer state
+  below the dye's S₁ (Chanmungkalakul et al., *Chin. Chem. Lett.* 35, 109227, 2024), which would quench fluorescence
+  and even speed up triplet formation. A phenylene spacer weakens this as well as TTET, so n = 0 vs n = 1 is the real
+  trade-off.
+- **Conjugation shifts the levels.** Fusing or conjugating rings onto COT raises its T₁ (El Bakouri et al., *Chem.
+  Sci.* 2025), and an aryl on C5 red-shifts Cy5 somewhat. Both narrow the gaps the design relies on; Cy5's T₁ (1.60 eV)
+  still clears COT's (0.95–1.1 eV) with room to spare.
 
 ### Molecules from papers
 

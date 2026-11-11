@@ -8,6 +8,10 @@
     "label": "Triplet molecules"
   },
   {
+    "id": "selfheal",
+    "label": "Self-healing dyes"
+  },
+  {
     "id": "xanthenes",
     "label": "Xanthenes"
   },

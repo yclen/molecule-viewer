@@ -27,6 +27,7 @@ from rdkit.Chem.MolStandardize import rdMolStandardize
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_halotag import build_conjugate  # noqa: E402
+from build_lhcii import build_lhcii  # noqa: E402
 from build_membrane import build_membrane  # noqa: E402
 from build_voltron import build_fusion, halo_domain, mneon_domain  # noqa: E402
 from catalog import MOLECULES, TABS  # noqa: E402
@@ -145,12 +146,57 @@ def build_small_cached(entry):
     return built
 
 
+def block_order(mol, entry):
+    """Atom order that puts each of entry["blocks"] at the end of the file, in catalog order. A block is a SMARTS that
+    must match once (or a SMILES, matched with the molecule's own aromaticity), plus its H; one block may have
+    neither and takes every atom left over; otherwise leftover atoms (a linker) go first and are no site. Returns (new order as
+    old indices, sizes of the blocks)."""
+    taken, found = set(), {}
+    for k, b in enumerate(entry["blocks"]):
+        if not (b.get("smarts") or b.get("smiles")):
+            continue
+        query = Chem.MolFromSmarts(b["smarts"]) if b.get("smarts") else Chem.MolFromSmiles(b["smiles"])
+        hits = mol.GetSubstructMatches(query)
+        if len(hits) != 1:
+            raise RuntimeError(f"{entry['name']}: block {b['label']} matches {len(hits)} times, expected once")
+        atoms = set(hits[0])
+        atoms |= {n.GetIdx() for i in hits[0] for n in mol.GetAtomWithIdx(i).GetNeighbors() if n.GetAtomicNum() == 1}
+        if atoms & taken:
+            raise RuntimeError(f"{entry['name']}: block {b['label']} overlaps another block")
+        taken |= atoms
+        found[k] = sorted(atoms)
+    rest = [i for i in range(mol.GetNumAtoms()) if i not in taken]
+    blocks = [found.get(k, rest) for k in range(len(entry["blocks"]))]
+    if len(found) < len(blocks) - 1:
+        raise RuntimeError(f"{entry['name']}: only one block may take the leftover atoms")
+    head = [] if len(found) < len(blocks) else rest
+    return head + [i for blk in blocks for i in blk], [len(blk) for blk in blocks]
+
+
+def block_sites(entry):
+    """index.json sites for entry["blocks"]: each block is `last` atoms, followed by the `skip` atoms of later blocks."""
+    mol = rdMolStandardize.LargestFragmentChooser().choose(Chem.MolFromSmiles(entry["smiles"]))
+    _, sizes = block_order(Chem.AddHs(mol), entry)
+    sites = []
+    for k, b in enumerate(entry["blocks"]):
+        site = dict(label=b["label"], kind=b["kind"], last=sizes[k])
+        if sum(sizes[k + 1:]):
+            site["skip"] = sum(sizes[k + 1:])
+        if b.get("on"):
+            site["on"] = True
+        sites.append(site)
+    return sites
+
+
 def build_small(entry):
     mol = Chem.MolFromSmiles(entry["smiles"])
     if mol is None:
         raise ValueError(f"bad SMILES for {entry['name']}")
     mol = rdMolStandardize.LargestFragmentChooser().choose(mol)  # drop counter-ions
     mol = Chem.AddHs(mol)
+    # named chromophores go last, in catalog order, so the app can find them. Matched now: setting up MMFF re-perceives
+    # aromaticity in place (e.g. a xanthene), after which a SMILES block would no longer match
+    order = block_order(mol, entry)[0] if entry.get("blocks") else None
 
     heavy = mol.GetNumHeavyAtoms()
     n_rot = rdMolDescriptors.CalcNumRotatableBonds(mol)
@@ -211,6 +257,9 @@ def build_small(entry):
                   f"periphery by RDKit {ff} with the core fixed; {metal} at the centre")
     else:
         metal = None
+
+    if order:
+        mol = Chem.RenumberAtoms(mol, order)
 
     conf = mol.GetConformer(conf_id)
     symbols = [a.GetSymbol() for a in mol.GetAtoms()]
@@ -458,6 +507,9 @@ def main():
         out_dir = SAMPLES / tab
         out_dir.mkdir(parents=True, exist_ok=True)
         index = []
+        # with --only, entries that are skipped keep what an earlier full build wrote (e.g. a membrane's surroundings)
+        old_path = out_dir / "index.json"
+        old_index = {e["file"]: e for e in json.loads(old_path.read_text("utf-8"))} if old_path.exists() else {}
         if not all("param" in e for e in MOLECULES[tab]):  # parametric tabs: see docs/triplet-report.md
             report += [f"## {dict(TABS)[tab]}", ""]
 
@@ -467,12 +519,18 @@ def main():
                 index[-1]["sites"] = [entry["site"]]
             if "sites" in entry:
                 index[-1]["sites"] = entry["sites"]
+            if "blocks" in entry:  # named chromophores found by SMARTS (moved to the end of the file by build_small)
+                index[-1]["sites"] = block_sites(entry)
             if "param" in entry:  # built in the app from a repeat unit (tools/build_wire.py)
                 index[-1]["param"] = entry["param"]
                 if "sensitizers" in entry:
                     index[-1]["sensitizers"] = entry["sensitizers"]
                 continue
             if args.only and args.only not in entry["file"]:
+                generated = ("surroundings", "keepAxes") + (("sites",) if "photosystem" in entry else ())
+                for key in generated:
+                    if key in old_index.get(entry["file"], {}):
+                        index[-1][key] = old_index[entry["file"]][key]
                 continue
             print(f"[{tab}] {entry['name']} ...", end=" ", flush=True)
 
@@ -491,6 +549,28 @@ def main():
                 report += [f"### {entry['name']}", "", f"- Source: {comment.split(' | ', 1)[1]}",
                            f"- {len(symbols)} atoms, of which {len(built['symbols'])} lipid", ""]
                 summary.append((entry["name"], len(symbols), "model + MD lipids", 0, "-"))
+                continue
+
+            if "photosystem" in entry:  # pigments of a light-harvesting complex, see tools/build_lhcii.py
+                ps = entry["photosystem"]
+                def ccd(code):
+                    return fetch(f"https://files.rcsb.org/ligands/download/{code}.cif", CACHE / "ccd" / f"{code}.cif")
+                built = build_lhcii(pdb_text(ps["pdb"]), ccd, ps.get("chain", "A"), ps.get("only"),
+                                    ps.get("protein", True))
+                comment = f"{entry['name']} | {built['method']}"
+                (out_dir / entry["file"]).write_text(xyz_text(built["symbols"], built["coords"], comment), "utf-8")
+                index[-1]["sites"] = built["sites"]
+                if built["surroundings"]:
+                    index[-1]["surroundings"] = built["surroundings"]
+                touch = "; ".join(f"{car}: " + ", ".join(f"{chl} {d} Å" for chl, d in near)
+                                  for car, near in built["contacts"].items())
+                print(f"{len(built['symbols'])} atoms, {len(built['sites'])} pigments | {touch}")
+                report += [f"### {entry['name']}", "", f"- Source: {built['method']}",
+                           f"- {len(built['symbols'])} atoms, {built['surroundings']} of them protein; "
+                           f"{len(built['sites'])} pigment sites (conjugated atoms only)",
+                           f"- Closest chlorophyll macrocycles to each carotenoid's polyene: {touch}",
+                           "- Experimental coordinates, so no geometry check is applied.", ""]
+                summary.append((entry["name"], len(built["symbols"]), "X-ray", 0, "-"))
                 continue
 
             if "fusion" in entry:

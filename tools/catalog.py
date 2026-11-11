@@ -13,6 +13,9 @@ Each entry:
     site     - (optional) named chromophore: {label, kind, last, skip, on}. It is the file's last `last` atoms, leaving
                out the final `skip`, and starts in its singlet if `on`
     sites    - (optional) several of those
+    blocks   - (optional) named chromophores of a SMILES molecule: [{label, kind, smarts | smiles, on}]. Each must
+               match once; its atoms (with their H) are moved to the end of the file and become a site. One block may
+               leave out smarts/smiles: it takes every other atom. Otherwise leftover atoms (a linker) are no site
     fusion   - (optional) rhodopsin indicator: {tag, junction}, see tools/build_voltron.py
     membrane - (optional) an earlier file in the tab set into a lipid bilayer: {of, radius}, see tools/build_membrane.py
 
@@ -25,6 +28,7 @@ from catalog_uji2026 import SENSITIZERS as _UC_SENSITIZERS
 TABS = [
     ("basics", "Basics"),
     ("triplet", "Triplet molecules"),
+    ("selfheal", "Self-healing dyes"),
     ("xanthenes", "Xanthenes"),
     ("cyanines", "Cyanines"),
     ("dyes", "Other dyes"),
@@ -51,6 +55,61 @@ MOLECULES = {
                         default=8),
              sensitizers=dict(original="Bis-triarylamine thienoquinoxaline dioxide (original)",
                               **{"from": ["uc-sens", "tta/ptoep.xyz", "tadf/dmac-trz.xyz"]})),
+    ],
+    # ------------------------------------------------------------------ dyes with a linked triplet quencher
+    # Cyclooctatetraene (COT) takes the dye's triplet by triplet-triplet energy transfer: its relaxed (planar) T1,
+    # ~0.95 eV, is below the dye's, and its S1, ~4 eV, is far above it, so the dye's fluorescence is left alone.
+    # The literature ones use flexible tethers (TTET by collision); ours is a rigid rod. See README, "Self-healing dyes".
+    "selfheal": [
+        dict(file="cy5-cot.xyz", name="Cy5–COT (Altman 2012)",
+             desc="The first self-healing dye: COT on a flexible tether from one indolenine nitrogen. Cy5's triplet "
+                  "lifetime drops from 63 to ~1 µs and photobleaching slows 2-70×. Linker atoms illustrative.",
+             smiles="CC1(C)C(/C=C/C=C/C=C2/N(CCCCCC(=O)NCC3=CC=CC=CC=C3)c3ccc(S(=O)(=O)[O-])cc3C2(C)C)"
+                    "=[N+](CCCCCC(=O)O)c2ccc(S(=O)(=O)[O-])cc21",
+             source="drawing", formula="C46H54N3O9S2",
+             blocks=[dict(label="Cy5", kind="dye", on=True), dict(label="COT", kind="quencher", smarts="C1=CC=CC=CC=C1")],
+             note="Altman et al., Nat. Methods 9, 68 (2012), doi:10.1038/nmeth.1774: an amino-COT coupled to one NHS "
+                  "ester of bis-NHS sulfo-Cy5 through a 'flexible 12-atom linker'. The exact linker is in their SI Fig. 1, "
+                  "which we did not read: drawn here as hexanoyl amide to aminomethyl-COT. Triplet lifetimes and energies "
+                  "(Cy5 T1 1.60 eV, COT 0.95 eV): Zheng et al., J. Phys. Chem. Lett. 3, 2200 (2012)."),
+        dict(file="gr555-mito.xyz", name="Gentle Rhodamine GR555-mito (TMR–COT)",
+             desc="TMR with COT esterified onto the pendant ring's carboxyl (COT–CH2–O–C(=O)–Ar): 10× less singlet "
+                  "oxygen than TMRM and 4-5× less phototoxicity (Liu et al. 2024).",
+             smiles="CN(C)c1ccc2c(-c3ccccc3C(=O)OCC3=CC=CC=CC=C3)c3ccc(=[N+](C)C)cc-3oc2c1",
+             source="drawing", formula="C33H31N2O3",
+             blocks=[dict(label="TMR", kind="dye", on=True), dict(label="COT", kind="quencher", smarts="C1=CC=CC=CC=C1")],
+             note="Liu et al., ACS Cent. Sci. 10, 1933 (2024), doi:10.1021/acscentsci.4c00616: TMRM with its methyl "
+                  "ester swapped for a COT-methyl ester. Linkage and position from the paper; drawing ours."),
+        dict(file="self-healing-jf525.xyz", name="Self-healing JF525 (JF525–phenylene–carotenoid)",
+             desc="JF525 with a photosystem-style triplet quencher: a 1,4-phenylene (the TTA Flora linker) on the "
+                  "pendant ring, para to the xanthene, carrying 7'-apo-β-carotene. Both carboxyls are kept (lactone, "
+                  "HaloTag handle). Our design; see README for why its singlet levels need checking.",
+             smiles="CC1=C(C(CCC1)(C)C)/C=C/C(=C/C=C/C(=C/C=C/C=C(\\C)/C=C/C=C(\\C)/C=C/c2ccc(cc2)-c3cc(C(=O)[O-])"
+                    "c(C4=C5C=CC(=[N+]6CC(F)(F)C6)C=C5Oc7cc(N8CC(F)(F)C8)ccc47)cc3C(=O)O)/C)/C",
+             source="drawing", formula="C64H62F4N2O5",
+             blocks=[dict(label="JF525", kind="dye", on=True,
+                          smiles="c1cc(C(=O)[O-])c(C2=C3C=CC(=[N+]4CC(F)(F)C4)C=C3Oc5cc(N6CC(F)(F)C6)ccc25)cc1C(=O)O"),
+                     dict(label="Carotenoid", kind="quencher",
+                          smiles="CC1=C(C(CCC1)(C)C)/C=C/C(C)=C/C=C/C(C)=C/C=C/C=C(C)/C=C/C=C(C)/C=C")],
+             note="JF525 as in the Proteins tab (open zwitterion). The carotenoid is beta-carotene cut at C7' "
+                  "(7'-apo-beta-carotene) and bonded there to the phenylene, all-trans like the natural one: the "
+                  "aryl-ended carotenoid Gust and Moore joined to porphyrins in their carotenoporphyrin dyads. The "
+                  "phenylene sits para to the xanthene on JF525's pendant ring (the ring carbon between the two carboxyls' "
+                  "neighbours), so dye, linker and carotenoid line up as in TTA Flora 4."),
+        dict(file="lhcii.xyz", name="LHCII: chlorophylls + carotenoids (1RWT)",
+             desc="Nature's self-healing antenna: plant light-harvesting complex II, 14 chlorophylls and 4 "
+                  "carotenoids held by the protein (faint). Lutein 620 lies 3.6 Å from Chl a610 and takes its "
+                  "triplets. No covalent linker: the protein holds them in contact.",
+             photosystem=dict(pdb="1RWT", chain="A")),
+        dict(file="chl-a610-lutein-620.xyz", name="Chlorophyll + carotenoid pair (Chl a610 + Lutein 620)",
+             desc="Just the two pigments, cut out of LHCII at their crystal positions: the chlorophyll that makes "
+                  "most triplets and the lutein lying across it (3.6 Å apart) that takes them. No linker, no protein.",
+             photosystem=dict(pdb="1RWT", chain="A", only=["Chl a610", "Lutein 620"], protein=False)),
+        dict(file="cy5-phenylene-cot", name="Cy5–(phenylene)n–COT (our design)",
+             desc="COT on Cy5's benzo ring (C5, where sulfo-Cy5 has a sulfonate) at the end of a rigid rod of n "
+                  "1,4-phenylenes, the TTA Flora linker. n = 0 bonds COT straight to the dye. No published analogue found.",
+             param=dict(data="cy5-phenylene-cot.param.json", label="Phenylene linkers", symbol="n", min=0, max=4,
+                        default=1)),
     ],
     # ------------------------------------------------------------------ xanthene dyes
     "xanthenes": [

@@ -1,0 +1,207 @@
+[
+  {
+    "file": "cy5-cot.xyz",
+    "name": "Cy5–COT (Altman 2012)",
+    "description": "The first self-healing dye: COT on a flexible tether from one indolenine nitrogen. Cy5's triplet lifetime drops from 63 to ~1 µs and photobleaching slows 2-70×. Linker atoms illustrative.",
+    "sites": [
+      {
+        "label": "Cy5",
+        "kind": "dye",
+        "last": 99,
+        "skip": 15,
+        "on": true
+      },
+      {
+        "label": "COT",
+        "kind": "quencher",
+        "last": 15
+      }
+    ]
+  },
+  {
+    "file": "gr555-mito.xyz",
+    "name": "Gentle Rhodamine GR555-mito (TMR–COT)",
+    "description": "TMR with COT esterified onto the pendant ring's carboxyl (COT–CH2–O–C(=O)–Ar): 10× less singlet oxygen than TMRM and 4-5× less phototoxicity (Liu et al. 2024).",
+    "sites": [
+      {
+        "label": "TMR",
+        "kind": "dye",
+        "last": 54,
+        "skip": 15,
+        "on": true
+      },
+      {
+        "label": "COT",
+        "kind": "quencher",
+        "last": 15
+      }
+    ]
+  },
+  {
+    "file": "self-healing-jf525.xyz",
+    "name": "Self-healing JF525 (JF525–phenylene–carotenoid)",
+    "description": "JF525 with a photosystem-style triplet quencher: a 1,4-phenylene (the TTA Flora linker) on the pendant ring, para to the xanthene, carrying 7'-apo-β-carotene. Both carboxyls are kept (lactone, HaloTag handle). Our design; see README for why its singlet levels need checking.",
+    "sites": [
+      {
+        "label": "JF525",
+        "kind": "dye",
+        "last": 55,
+        "skip": 72,
+        "on": true
+      },
+      {
+        "label": "Carotenoid",
+        "kind": "quencher",
+        "last": 72
+      }
+    ]
+  },
+  {
+    "file": "lhcii.xyz",
+    "name": "LHCII: chlorophylls + carotenoids (1RWT)",
+    "description": "Nature's self-healing antenna: plant light-harvesting complex II, 14 chlorophylls and 4 carotenoids held by the protein (faint). Lutein 620 lies 3.6 Å from Chl a610 and takes its triplets. No covalent linker: the protein holds them in contact.",
+    "surroundings": 1661,
+    "sites": [
+      {
+        "label": "Chl b601",
+        "kind": "chlorophyll",
+        "last": 30,
+        "skip": 2013
+      },
+      {
+        "label": "Chl a602",
+        "kind": "chlorophyll",
+        "last": 30,
+        "skip": 1876
+      },
+      {
+        "label": "Chl a603",
+        "kind": "chlorophyll",
+        "last": 30,
+        "skip": 1739
+      },
+      {
+        "label": "Chl a604",
+        "kind": "chlorophyll",
+        "last": 30,
+        "skip": 1612
+      },
+      {
+        "label": "Chl b605",
+        "kind": "chlorophyll",
+        "last": 30,
+        "skip": 1530
+      },
+      {
+        "label": "Chl b606",
+        "kind": "chlorophyll",
+        "last": 30,
+        "skip": 1440
+      },
+      {
+        "label": "Chl b607",
+        "kind": "chlorophyll",
+        "last": 30,
+        "skip": 1304
+      },
+      {
+        "label": "Chl b608",
+        "kind": "chlorophyll",
+        "last": 30,
+        "skip": 1168
+      },
+      {
+        "label": "Chl b609",
+        "kind": "chlorophyll",
+        "last": 30,
+        "skip": 1032
+      },
+      {
+        "label": "Chl a610",
+        "kind": "chlorophyll",
+        "last": 30,
+        "skip": 895,
+        "on": true
+      },
+      {
+        "label": "Chl a611",
+        "kind": "chlorophyll",
+        "last": 30,
+        "skip": 758
+      },
+      {
+        "label": "Chl a612",
+        "kind": "chlorophyll",
+        "last": 30,
+        "skip": 621
+      },
+      {
+        "label": "Chl a613",
+        "kind": "chlorophyll",
+        "last": 30,
+        "skip": 484
+      },
+      {
+        "label": "Chl a614",
+        "kind": "chlorophyll",
+        "last": 30,
+        "skip": 396
+      },
+      {
+        "label": "Lutein 620",
+        "kind": "quencher",
+        "last": 32,
+        "skip": 298
+      },
+      {
+        "label": "Lutein 621",
+        "kind": "quencher",
+        "last": 32,
+        "skip": 200
+      },
+      {
+        "label": "Violaxanthin 622",
+        "kind": "quencher",
+        "last": 32,
+        "skip": 100
+      },
+      {
+        "label": "Neoxanthin 623",
+        "kind": "quencher",
+        "last": 31
+      }
+    ]
+  },
+  {
+    "file": "chl-a610-lutein-620.xyz",
+    "name": "Chlorophyll + carotenoid pair (Chl a610 + Lutein 620)",
+    "description": "Just the two pigments, cut out of LHCII at their crystal positions: the chlorophyll that makes most triplets and the lutein lying across it (3.6 Å apart) that takes them. No linker, no protein.",
+    "sites": [
+      {
+        "label": "Chl a610",
+        "kind": "chlorophyll",
+        "last": 30,
+        "skip": 98,
+        "on": true
+      },
+      {
+        "label": "Lutein 620",
+        "kind": "quencher",
+        "last": 32
+      }
+    ]
+  },
+  {
+    "file": "cy5-phenylene-cot",
+    "name": "Cy5–(phenylene)n–COT (our design)",
+    "description": "COT on Cy5's benzo ring (C5, where sulfo-Cy5 has a sulfonate) at the end of a rigid rod of n 1,4-phenylenes, the TTA Flora linker. n = 0 bonds COT straight to the dye. No published analogue found.",
+    "param": {
+      "data": "cy5-phenylene-cot.param.json",
+      "label": "Phenylene linkers",
+      "symbol": "n",
+      "min": 0,
+      "max": 4,
+      "default": 1
+    }
+  }
+]

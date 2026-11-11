@@ -68,6 +68,16 @@ function swapSensitizer(rows0, sensIdx, swap, context, variant) {
 
 const BUILDERS = {
   /**
+   * One finished geometry per value of n, each built and optimised offline as a whole molecule
+   * (e.g. dye –(C6H4)n– quencher from tools/build_selfheal.py). Each frame brings its own sites and notes.
+   */
+  frames(d, n) {
+    const f = d.frames[String(n)];
+    if (!f) throw new Error(`no geometry for n = ${n}`);
+    return { atoms: rows(f.atoms), sites: f.sites, comment: `${f.comment} | ${d.method}`, note: f.note };
+  },
+
+  /**
    * n DPA units, anthracene C2 -> 1,4-phenylene -> C6 of the next one, H on both ends.
    * Each DPA + linker is the same set of atoms shifted by t (both pieces are centrosymmetric).
    */
