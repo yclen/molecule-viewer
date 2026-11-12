@@ -26,6 +26,7 @@ const FRAME_MS = 50;
 const FRAMES_PER_TEXT = 5;
 const RATE_OVER_S = 2;
 const EMPTY_BIN = 0.5; // where an empty bin sits on a log axis, which can't show 0: half a count
+const LEAST_SECONDS = 0.25; // the per-second scale treats the first moments as this long, so the start doesn't spike
 const PAST_WARNING = 0.01;
 const EXACT_MOST_N = 9;
 const EXACT_SLOW_S = 60;
@@ -81,25 +82,6 @@ class Measurement {
     }
     return { edges, main, other };
   }
-}
-
-/**
- * Tick numbers with as many decimals as their spacing needs, so small per-molecule heights (0.0002, 0.0004, ...) don't
- * all round to the same number. On a log axis each tick is spaced by its own decade.
- */
-function yTicks(splits, log) {
-  const decimals = (step) => {
-    let d = Math.max(0, -Math.floor(Math.log10(step)));
-    while (d < 12 && Math.abs(Math.round(step * 10 ** d) - step * 10 ** d) > 1e-6) d++;
-    return d;
-  };
-  const spacing = splits.length > 1 ? Math.abs(splits[1] - splits[0]) : 0;
-  return splits.map((v) => {
-    if (v == null) return '';
-    if (v === 0) return '0';
-    const step = log || !spacing ? 10 ** Math.floor(Math.log10(Math.abs(v)) + 1e-9) : spacing;
-    return v.toFixed(Math.min(decimals(step), 12));
-  });
 }
 
 const field = (name) => {
@@ -194,7 +176,7 @@ export function mount(root) {
   let target = TARGET;
   let autoY = true;
   let acquired = 0;
-  let lastTick = performance.now();
+  let lastTick = performance.now() / 1000; // in s, like the ticks below
   let recent = []; // [time, molecules, photons], over the last RATE_OVER_S
   let frame = 0;
   let lastDrawn = -1;
@@ -488,11 +470,11 @@ export function mount(root) {
       scales: { x: { time: false, auto: false, min: 0, max: p.window }, y: { distr: log ? 3 : 1, auto: false, min: log ? EMPTY_BIN : 0, max: 10 } },
       axes: [
         { ...AXIS, label: 'Time after the pulse starts (ns)' },
-        { ...AXIS, label: 'Photons per molecule per ns', size: Y_AXIS_SIZE, values: (u, splits) => yTicks(splits, log) },
+        { ...AXIS, label: 'Photons per bin per second', size: Y_AXIS_SIZE },
       ],
       series: [{}, ...piles.map((pile, i) => ({
         stroke: COLOURS[pile], width: 1.5, fill: `${COLOURS[pile]}${i === 0 ? '30' : '40'}`,
-        paths: uPlot.paths.stepped({ align: 1 }), points: { show: false }, fillTo: () => (log ? EMPTY_BIN * (drawn?.per ?? 1) : 0),
+        paths: uPlot.paths.stepped({ align: 1 }), points: { show: false }, fillTo: () => (log ? EMPTY_BIN * (drawn?.perS ?? 1) : 0),
         show: !hidden.has(pile),
       }))],
       hooks: {
@@ -573,7 +555,7 @@ export function mount(root) {
       ctx.beginPath();
       let pen = false;
       for (let k = 0; k < expected[i].length; k++) {
-        const y = expected[i][k] * drawn.per;
+        const y = expected[i][k] * drawn.perS;
         if (log && !(y > 0)) {
           pen = false;
           continue;
@@ -590,19 +572,18 @@ export function mount(root) {
   }
 
   /**
-   * The plot shows photons per molecule per ns: the counts divided by the molecules flashed and the bin width. So it
-   * settles to a steady height as the counts build up, whatever the throughput or the computer's speed, and doesn't
-   * change with the bin width. The counts themselves are kept as counts.
+   * The plot shows counts per second of acquisition (the ACQ clock), so it settles to a steady height as the counts
+   * build up instead of growing. The counts themselves are kept as counts.
    */
   function draw() {
     if (!plot) return;
     const { edges, main, other } = measurement.binned(cellsPerBin);
     const log = $('log').checked;
-    const per = 1 / (Math.max(measurement.totals.molecules, 1) * (edges[1] - edges[0])); // the bins are all as wide
-    const floor = log ? EMPTY_BIN * per : 0;
+    const perS = 1 / Math.max(acquired, LEAST_SECONDS);
+    const floor = log ? EMPTY_BIN * perS : 0;
     const steps = (counts) => {
       const y = new Float64Array(counts.length + 1);
-      for (let k = 0; k < counts.length; k++) y[k] = Math.max(counts[k] * per, floor);
+      for (let k = 0; k < counts.length; k++) y[k] = Math.max(counts[k] * perS, floor);
       y[counts.length] = y[counts.length - 1] ?? floor;
       return y;
     };
@@ -610,7 +591,7 @@ export function mount(root) {
     if (exactShown()) {
       expected = binnedExact(exact.result, edges).map((share) => share.map((v) => v * measurement.totals.molecules));
     }
-    drawn = { edges, main, other, expected, per };
+    drawn = { edges, main, other, expected, perS };
     legend.lastChild.hidden = !expected;
     const piles = PILES[p.sample];
     plot.setData([Array.from(edges), ...[main, other].slice(0, piles.length).map((c) => Array.from(steps(c)))], false);
@@ -619,7 +600,7 @@ export function mount(root) {
 
   function fitY() {
     if (!drawn) return;
-    const { edges, main, other, expected, per } = drawn;
+    const { edges, main, other, expected, perS } = drawn;
     const { min, max } = plot.scales.x;
     const piles = PILES[p.sample];
     if (yRange && piles.every((pile) => hidden.has(pile))) return plot.setScale('y', yRange); // nothing to fit to
@@ -633,8 +614,8 @@ export function mount(root) {
       }
     });
     const log = $('log').checked;
-    if (log) setY({ min: EMPTY_BIN * per, max: Math.max(top * 2, 10) * per });
-    else setY({ min: 0, max: Math.max(top * 1.08, 5) * per });
+    if (log) setY({ min: EMPTY_BIN * perS, max: Math.max(top * 2, 10) * perS });
+    else setY({ min: 0, max: Math.max(top * 1.08, 5) * perS });
   }
 
   /**
@@ -660,7 +641,7 @@ export function mount(root) {
 
   function showBin(t) {
     if (!drawn) return;
-    const { edges, main, other, expected, per } = drawn;
+    const { edges, main, other, expected, perS } = drawn;
     let k = 0;
     while (k < edges.length - 1 && edges[k + 1] <= t) k++;
     if (t < 0 || k >= main.length) return;
@@ -668,7 +649,7 @@ export function mount(root) {
     const parts = [`${fmt(edges[k], 4)} to ${fmt(edges[k + 1], 4)} ns`];
     piles.forEach((pile, i) => {
       const counts = i === 0 ? main : other;
-      parts.push(`${pile} ${fmt(counts[k] * per, 3)} /ns${expected ? ` (exact ${fmt(expected[i][k] * per, 3)})` : ''}, ${int(counts[k])} counted`);
+      parts.push(`${pile} ${fmt(counts[k] * perS, 3)} /s${expected ? ` (exact ${fmt(expected[i][k] * perS, 3)} /s)` : ''}, ${int(counts[k])} counted`);
     });
     $('status').textContent = parts.join('   ·   ');
   }
@@ -750,6 +731,7 @@ export function mount(root) {
       piles.forEach((pile, i) => (row[`${pile}_photons`] = counted[i][k]));
       row.photons_per_molecule_per_ns = total * scale;
       row.error = Math.sqrt(total) * scale;
+      row.photons_per_s = total / Math.max(acquired, LEAST_SECONDS); // what the plot shows: per second of acquisition
       if (exactBins) piles.forEach((pile, i) => (row[`exact_${pile}_photons`] = exactBins[i][k] * totals.molecules));
       rows.push(row);
     }
