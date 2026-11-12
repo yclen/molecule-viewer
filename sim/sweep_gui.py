@@ -1,3 +1,7 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["numpy>=2.0", "scipy>=1.13", "numba>=0.60", "PyQt6>=6.6", "pyqtgraph>=0.13.7", "matplotlib>=3.8"]
+# ///
 """A window for intensity sweeps: set the parameters, run the sweep in the background, then plot the results.
 
   python sim/sweep_gui.py

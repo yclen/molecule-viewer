@@ -1,0 +1,11 @@
+# Python packages for the pulse experiment windows and the command-line simulation in sim/.
+# The molecule viewer itself needs none of these: it runs in a browser.
+#
+#   python launch.py            (sets up .venv from this file on first run, then shows a menu)
+#   pip install -r requirements.txt   (if you manage your own environment)
+numpy>=2.0
+scipy>=1.13
+numba>=0.60
+PyQt6>=6.6
+pyqtgraph>=0.13.7
+matplotlib>=3.8

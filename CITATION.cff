@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Molecule Viewer and TTA pulse experiments"
+abstract: >-
+  A browser-based 3D molecule viewer with excited-state glow and scripted photophysics simulations, plus a Monte Carlo
+  and master-equation simulation of triplet-triplet annihilation upconversion with live pulse-experiment and
+  intensity-sweep apps.
+type: software
+authors:
+  - alias: yclen
+repository-code: "https://github.com/yclen/molecule-viewer"
+url: "https://yclen.github.io/molecule-viewer/"
+license: MIT
+version: 0.1.0
+date-released: 2026-11-11
+keywords:
+  - molecular visualization
+  - photophysics
+  - triplet-triplet annihilation
+  - upconversion
+  - Monte Carlo

@@ -6,7 +6,9 @@ The system is a string of `n + 2` letters, one per site: the sensitizer, DPA 1 t
 is `G`, `T` or `S`. Rules rewrite one or two sites at a rate per ns, and there is no time step: the engine adds up
 the rates of every rule that can fire, waits a random time, and fires one (the Gillespie method).
 
-Needs Python with `numpy`, `scipy` and `numba`. The first run compiles for a few seconds.
+Needs Python with `numpy`, `scipy` and `numba`. The first run compiles for a few seconds. The easiest way to get
+them, and to open the two windows, is the launcher in the project folder (`python launch.py`, or double-click
+`Launch.bat` / `Launch.command`): see the main [README](../README.md#launch-it).
 
 | File | What it is |
 |---|---|

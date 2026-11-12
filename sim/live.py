@@ -1,3 +1,7 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["numpy>=2.0", "scipy>=1.13", "numba>=0.60", "PyQt6>=6.6", "pyqtgraph>=0.13.7", "matplotlib>=3.8"]
+# ///
 """A live pulse experiment: fresh molecules are flashed all the time, and each photon lands in a histogram on screen.
 
   python sim/live.py

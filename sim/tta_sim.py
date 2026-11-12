@@ -1,3 +1,7 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["numpy>=2.0", "scipy>=1.13", "numba>=0.60", "matplotlib>=3.8"]
+# ///
 """Command line for the TTA Flora 4 simulation. See README.md for the commands and what's in the data folder.
 
 Simulated times are in ns and rates per ns. Wall-clock figures (wall_s, seconds in index.csv) are real seconds.
