@@ -8,8 +8,8 @@ import { binnedExact, fluorescenceExact, QUIET } from '../sim/exact.js';
 import ExactWorker from './exact-worker.js?worker&inline';
 import McWorker from './mc-worker.js?worker&inline';
 import {
-  defaultValues, exactSeconds, FIELDS, FLUOR_FIELDS, fmt, howLong, int, kexcPerMw, parameters, percent, powerText,
-  rulesFor, TTA_FIELDS,
+  AXIS, defaultValues, exactSeconds, FIELDS, FLUOR_FIELDS, fmt, howLong, int, kexcPerMw, parameters, percent, powerText,
+  rulesFor, TTA_FIELDS, Y_AXIS_SIZE,
 } from './model.js';
 import { saveLocation, saveRun, stamp, toCsv } from './store.js';
 
@@ -458,7 +458,6 @@ export function mount(root) {
     plot?.destroy();
     const log = $('log').checked;
     const piles = PILES[p.sample];
-    const axis = { stroke: '#7c8796', grid: { stroke: 'rgba(255,255,255,0.05)', width: 1 }, ticks: { stroke: 'rgba(255,255,255,0.12)', width: 1 }, font: '12px Segoe UI, system-ui, sans-serif', labelFont: '12px Segoe UI, system-ui, sans-serif' };
     plot = new uPlot({
       width: Math.max(box.clientWidth, 200),
       height: Math.max(box.clientHeight, 150),
@@ -467,8 +466,8 @@ export function mount(root) {
         bind: { dblclick: () => null } },
       scales: { x: { time: false, auto: false, min: 0, max: p.window }, y: { distr: log ? 3 : 1, auto: false, min: log ? EMPTY_BIN : 0, max: 10 } },
       axes: [
-        { ...axis, label: 'Time after the pulse starts (ns). Red: pulse on', labelSize: 22 },
-        { ...axis, label: 'Photons per bin', labelSize: 22, size: 60 },
+        { ...AXIS, label: 'Time after the pulse starts (ns). Red: pulse on' },
+        { ...AXIS, label: 'Photons per bin', size: Y_AXIS_SIZE },
       ],
       series: [{}, ...piles.map((pile, i) => ({
         stroke: COLOURS[pile], width: 1.5, fill: `${COLOURS[pile]}${i === 0 ? '30' : '40'}`,

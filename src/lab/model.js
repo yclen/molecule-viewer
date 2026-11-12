@@ -103,6 +103,18 @@ export function fmt(v, digits = 3) {
   return String(Number(v.toPrecision(digits)));
 }
 
+// How every plot's axes look: large, bright tick numbers and axis titles, so they read at a glance
+export const PLOT_FONT = "'Segoe UI', system-ui, -apple-system, Roboto, sans-serif";
+export const AXIS = {
+  stroke: '#b9c2ce',
+  grid: { stroke: 'rgba(255,255,255,0.06)', width: 1 },
+  ticks: { stroke: 'rgba(255,255,255,0.18)', width: 1 },
+  font: `15px ${PLOT_FONT}`,
+  labelFont: `600 16px ${PLOT_FONT}`,
+  labelSize: 34,
+};
+export const Y_AXIS_SIZE = 82; // room for the tick numbers at that size
+
 export const int = (v) => Math.round(v).toLocaleString('en-US');
 export const percent = (v, d = 2) => (Number.isFinite(v) ? `${(100 * v).toFixed(d)}%` : '–');
 

@@ -112,10 +112,11 @@
 .plot-head .spacer { flex: 1; }
 .plot-head button { padding: 4px 10px; font-size: 11px; letter-spacing: 2px; }
 .plot-head button[aria-pressed='true'] { color: var(--perylene); border-color: var(--perylene); background: #0f2a30; }
-.plot-title { text-align: center; color: var(--muted); font-size: 13px; margin: 6px 0 2px; }
+.plot-title { text-align: center; color: var(--muted); font-size: 15px; margin: 6px 0 2px; }
 .plot-title b { color: var(--text); font-weight: 500; }
 .plot-box { flex: 1; min-height: 0; position: relative; }
-.legend { position: absolute; top: 10px; right: 14px; background: rgba(13, 17, 23, 0.85); border: 1px solid var(--edge); border-radius: 4px; padding: 6px 10px; font-size: 12px; z-index: 2; }
+.legend { position: absolute; top: 10px; right: 14px; background: rgba(13, 17, 23, 0.85); border: 1px solid var(--edge); border-radius: 4px; padding: 6px 10px; font-size: 14px; z-index: 2; }
+.lab .u-legend { font-size: 14px; }
 .legend div { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 2px 0; }
 .legend div.off { opacity: 0.35; }
 .legend i { display: inline-block; width: 18px; height: 3px; border-radius: 1px; }

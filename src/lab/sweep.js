@@ -8,7 +8,9 @@ import 'uplot/dist/uPlot.min.css';
 import { EVENTS, N_EVENTS, PULSE_DEFAULTS, resolve } from '../sim/rules.js';
 import ExactWorker from './exact-worker.js?worker&inline';
 import McWorker from './mc-worker.js?worker&inline';
-import { defaultValues, FIELDS, fmt, int, kexcPerMw, parseValues, rulesFor, TTA_FIELDS } from './model.js';
+import {
+  AXIS, defaultValues, FIELDS, fmt, int, kexcPerMw, parseValues, PLOT_FONT, rulesFor, TTA_FIELDS, Y_AXIS_SIZE,
+} from './model.js';
 import {
   deleteRun, destination, escapeHtml, folderAccess, fromCsv, listFolderRuns, listRuns, makeRunFolder, onFolderChange, putRun,
   saveLocation, saveRun, stamp, toCsv,
@@ -114,7 +116,7 @@ const TEMPLATE = (v) => `
 </div>
 <div class="lab-body" data-pane="plot" hidden style="padding-top:12px; grid-template-columns: minmax(0, 1fr) 330px">
   <div class="lab-main">
-    <section class="panel" style="display:flex; flex-direction:column; flex: 0 1 34%; min-height: 160px">
+    <section class="panel" style="display:flex; flex-direction:column; flex: 0 1 24%; min-height: 140px">
       <div class="section">Intensity runs <span class="hint">click to pick · Ctrl or Shift for several</span></div>
       <div class="runs-box"><table class="runs"><thead><tr><th>Run</th><th>Date</th><th>Rows</th><th>Swept</th><th>Method</th><th>n</th><th>Pulse, ns</th><th>Kept in</th></tr></thead><tbody data-id="runs"></tbody></table></div>
     </section>
@@ -672,8 +674,6 @@ const logAxis = (scaleBy = 1) => ({
   values: (u, splits) => splits.map((v) => (v == null ? '' : isDecade(v) ? decadeLabel(v * scaleBy) : fmt(v * scaleBy, 2))),
 });
 
-const AXIS = { stroke: '#7c8796', grid: { stroke: 'rgba(255,255,255,0.05)', width: 1 }, ticks: { stroke: 'rgba(255,255,255,0.12)', width: 1 },
-  font: '12px Segoe UI, system-ui, sans-serif', labelFont: '12px Segoe UI, system-ui, sans-serif' };
 
 /**
  * Draw `kind` for `runs` into `holder`. Returns { destroy, resize }. kind 'preview' is the run tab's log-log of photons,
@@ -774,8 +774,8 @@ function chart(holder, runs, kind, { logx = false, perMw = null, title = null })
         ctx.lineTo(left + width, py);
         ctx.stroke();
         ctx.setLineDash([]);
-        ctx.fillStyle = '#7c8796';
-        ctx.font = `${11 * dpr}px Segoe UI, system-ui, sans-serif`;
+        ctx.fillStyle = '#b9c2ce';
+        ctx.font = `${14 * dpr}px ${PLOT_FONT}`;
         ctx.textAlign = 'right';
         ctx.fillText(`Limit ${fmt(limit, 3)}%: triplet yield × f/(1+f)`, left + width - 6 * dpr, py - 5 * dpr);
       }
@@ -783,14 +783,14 @@ function chart(holder, runs, kind, { logx = false, perMw = null, title = null })
     }],
   };
 
-  const yLabel = kind === 'counts_log' ? 'Photons per molecule (log scale)' : kind === 'counts' ? 'Photons per molecule, per pulse'
+  const yLabel = kind === 'counts_log' ? 'Photons per molecule' : kind === 'counts' ? 'Photons per molecule, per pulse'
     : kind === 'preview' ? 'Photons per molecule' : 'Quantum yield (%), photons per excitation';
   let yMax = null;
   if (limit != null) yMax = limit * 1.12;
   const xs = data[0].filter((v) => v > 0);
   const xRange = logx ? [Math.min(...xs) / 1.3, Math.max(...xs) * 1.3] : [0, Math.max(...data[0]) * 1.03];
 
-  const parts = kind === 'counts_log' ? [0.72, 0.28] : [1];
+  const parts = kind === 'counts_log' ? [0.64, 0.36] : [1];
   holder.innerHTML = '';
   Object.assign(holder.style, { display: 'flex', flexDirection: 'column' });
   const boxes = parts.map(() => {
@@ -813,8 +813,8 @@ function chart(holder, runs, kind, { logx = false, perMw = null, title = null })
     },
     axes: [
       { ...AXIS, ...(logx ? logAxis() : {}), label: parts.length > 1 ? undefined : `${xlabel}${logx ? ' (log scale)' : ''}`,
-        labelSize: parts.length > 1 ? 0 : 22, ...(parts.length > 1 ? { values: (u, sp) => sp.map(() => ''), size: 10 } : {}) },
-      { ...AXIS, label: yLabel, labelSize: 22, size: 70, ...(logy ? logAxis() : {}) },
+        labelSize: parts.length > 1 ? 0 : AXIS.labelSize, ...(parts.length > 1 ? { values: (u, sp) => sp.map(() => ''), size: 10 } : {}) },
+      { ...AXIS, label: yLabel, size: Y_AXIS_SIZE, ...(logy ? logAxis() : {}) },
       ...(topAxis ? [topAxis] : []),
     ],
     series,
@@ -830,7 +830,7 @@ function chart(holder, runs, kind, { logx = false, perMw = null, title = null })
       legend: { show: false },
       cursor: { sync: { key: sync.key }, points: { size: 6 } },
       scales: { x: { time: false, distr: 3, auto: false, range: () => xRange }, y: { auto: false, range: () => [-0.15, 2.3] } },
-      axes: [{ ...AXIS, ...logAxis(), label: `${xlabel} (log scale)`, labelSize: 22 }, { ...AXIS, label: 'Local slope', labelSize: 22, size: 70, splits: () => [0, 1, 2] }],
+      axes: [{ ...AXIS, ...logAxis(), label: `${xlabel} (log scale)` }, { ...AXIS, label: 'Slope', size: Y_AXIS_SIZE, splits: () => [0, 1, 2] }],
       series: [{}, ...slopes.map(({ c }) => ({ label: `${c.label || 'Local'} slope`, stroke: c.colour, width: 2, spanGaps: true, points: { show: true, size: 5, fill: c.colour } }))],
       hooks: { drawClear: [(u) => {
         const { ctx } = u;
@@ -838,8 +838,8 @@ function chart(holder, runs, kind, { logx = false, perMw = null, title = null })
         ctx.save();
         ctx.setLineDash([4 * dpr, 3 * dpr]);
         ctx.strokeStyle = 'rgba(124,135,150,0.7)';
-        ctx.fillStyle = '#7c8796';
-        ctx.font = `${10 * dpr}px Segoe UI, system-ui, sans-serif`;
+        ctx.fillStyle = '#b9c2ce';
+        ctx.font = `${13 * dpr}px ${PLOT_FONT}`;
         ctx.textAlign = 'right';
         for (const [level, text] of [[2, '2: needs two absorptions'], [1, '1'], [0, '0: saturated']]) {
           const py = u.valToPos(level, 'y', true);
