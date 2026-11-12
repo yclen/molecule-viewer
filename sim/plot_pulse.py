@@ -15,6 +15,8 @@ import numpy as np
 
 DPA, PERYLENE = '#2a78d6', '#11d8f2'  # perylene emits cyan blue, DPA a deeper blue
 INK, MUTED, GRID, BASE = '#52514e', '#898781', '#e1e0d9', '#c3c2b7'
+AXIS_LABEL = {'color': '#2c2b29', 'fontsize': 14, 'fontweight': 'bold'}  # axis titles: big enough to read the unit
+TICK_SIZE = 12
 MOST_PANELS = 6
 
 
@@ -80,13 +82,13 @@ def draw(ax, summary, h, xmax, ymax):
     ax.plot(h['time'], h['perylene'], color=PERYLENE, lw=2, ls=(0, (5, 2.5)), label='Perylene photons')
     ax.set_xlim(0, xmax)
     ax.set_ylim(0, ymax)
-    ax.set_xlabel('Time after pulse starts (ns)', color=MUTED)
+    ax.set_xlabel('Time after the pulse starts (ns)', **AXIS_LABEL)
     ax.grid(axis='y', color=GRID, lw=1)
     ax.set_axisbelow(True)
     for side in ('top', 'right', 'left'):
         ax.spines[side].set_visible(False)
     ax.spines['bottom'].set_color(BASE)
-    ax.tick_params(colors=MUTED, length=0)
+    ax.tick_params(colors=INK, length=0, labelsize=TICK_SIZE)
 
 
 def peak(points):
@@ -104,7 +106,7 @@ def plot_run(folder, limit=None):
         xmax = limit or time_limit(summary, h)
         draw(ax, summary, h, xmax, peak([(summary, h)]))
         note_share_past(ax, h, xmax)
-        ax.set_ylabel('Photons per molecule per ns', color=MUTED)
+        ax.set_ylabel('Photons per molecule per ns', **AXIS_LABEL)
         ax.legend(frameon=False, labelcolor=INK, loc='upper right')
         fig.suptitle(f'Quantum yield {quantum_yield(summary)} (photons emitted / photons absorbed)', x=0.07, ha='left',
                      color=INK, fontsize=13)
@@ -124,7 +126,7 @@ def plot_run(folder, limit=None):
             shown = [f"{name} = {float(summary[name]):g}" for name in swept if name != 'kHop']
             ax.set_title('\n'.join([f"kHop = {float(summary['kHop']):.3g} /ns", *shown,
                                     f'Quantum yield {quantum_yield(summary)}']), color=INK, fontsize=12, loc='left')
-        axes[0].set_ylabel('Photons per molecule per ns', color=MUTED)
+        axes[0].set_ylabel('Photons per molecule per ns', **AXIS_LABEL)
         axes[-1].legend(frameon=False, labelcolor=INK, loc='upper right')
         summary, h = points[0]
         fig.suptitle(settings_text(summary, h['width'], ['kHop', *swept]), x=0.01, ha='left', color=MUTED, fontsize=10)

@@ -9,7 +9,7 @@ import sys
 
 import numpy as np
 
-from plot_pulse import BASE, GRID, INK, MUTED, plt
+from plot_pulse import AXIS_LABEL, BASE, GRID, INK, MUTED, TICK_SIZE, plt
 
 SHADES = ['#b5d4f4', '#85b7eb', '#378add', '#185fa5', '#042c53']  # one hue, light to dark, for an ordered parameter
 MARKERS = ['o', 's', '^', 'D', 'v']
@@ -19,13 +19,13 @@ CONTEXT = ['hopRatio', 'kDecay', 'tauS', 'tauSens', 'tripletYield', 'f', 'n']
 
 def style(ax):
     ax.set_xscale('log')
-    ax.set_xlabel('excRatio: excitation rate relative to the sensitizer lifetime (log scale)', color=MUTED)
+    ax.set_xlabel('excRatio: excitation rate relative to the sensitizer lifetime (log scale)', **AXIS_LABEL)
     ax.grid(axis='y', color=GRID, lw=1)
     ax.set_axisbelow(True)
     for side in ('top', 'right', 'left'):
         ax.spines[side].set_visible(False)
     ax.spines['bottom'].set_color(BASE)
-    ax.tick_params(colors=MUTED, length=0, which='both')
+    ax.tick_params(colors=INK, length=0, which='both', labelsize=TICK_SIZE)
 
 
 def plot_sweep(folder):
@@ -71,10 +71,10 @@ def plot_sweep(folder):
     for ax in (linear, logged):
         style(ax)
     linear.set_ylim(0, top * 1.15)
-    linear.set_ylabel('Quantum yield (%)', color=MUTED)
+    linear.set_ylabel('Quantum yield (%)', **AXIS_LABEL)
     logged.set_yscale('log')
     logged.set_ylim(lowest / 2, top * 2)
-    logged.set_ylabel('Quantum yield (%), log scale', color=MUTED)
+    logged.set_ylabel('Quantum yield (%), log scale', **AXIS_LABEL)
     logged.legend(frameon=False, labelcolor=INK, loc='lower right')
 
     context = ', '.join(f'{name} = {float(first[name]):g}' for name in CONTEXT if name not in swept)

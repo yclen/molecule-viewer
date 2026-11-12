@@ -27,7 +27,8 @@ import pyqtgraph as pg
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
 from matplotlib.figure import Figure
 
-from live import AMBER, DIM, EDGE, FIELD, FIELDS, GO, LASER, MUTED, PANEL, TEXT, Lamp, kexc_per_mw, label, panel, style
+from live import (AMBER, DIM, EDGE, FIELD, FIELDS, GO, LASER, MUTED, PANEL, TEXT, Lamp, big_axes, kexc_per_mw, label,
+                  panel, style)
 from plot_intensity import KINDS, add_hover, draw, is_intensity, save_all
 from plot_pulse import PERYLENE
 from rules import PULSE_DEFAULTS, resolve
@@ -164,12 +165,7 @@ class Window(QtWidgets.QMainWindow):
         self.live_plot.setBackground(PANEL)
         self.live_plot.setLogMode(True, True)
         self.live_plot.showGrid(x=True, y=True, alpha=0.15)
-        for side in ('left', 'bottom'):
-            axis = self.live_plot.getAxis(side)
-            axis.setPen(pg.mkPen(EDGE))
-            axis.setTextPen(pg.mkPen(MUTED))
-        self.live_plot.setLabel('bottom', 'kExc', units='/ns')
-        self.live_plot.setLabel('left', 'Photons per molecule')
+        big_axes(self.live_plot, 'Photons per molecule', 'kExc (/ns)')
         self.live_plot.getAxis('bottom').enableAutoSIPrefix(False)
         self.live_plot.getAxis('left').enableAutoSIPrefix(False)
         right.addWidget(self.live_plot, 1)

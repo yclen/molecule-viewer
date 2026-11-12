@@ -148,7 +148,7 @@ const TEMPLATE = `
     </div>
     <section class="panel plot-panel">
       <div class="plot-head">
-        <div class="section">Histogram <span class="hint">drag to zoom · double-click to reset · click a legend entry to hide it</span></div>
+        <div class="section">Histogram <span class="hint">red band: pulse on · drag to zoom · double-click to reset · click a legend entry to hide it</span></div>
         <div class="spacer"></div>
         <button data-id="autoY" aria-pressed="true">↕ AUTO Y</button><button data-id="home">⌂ HOME</button>
       </div>
@@ -466,7 +466,7 @@ export function mount(root) {
         bind: { dblclick: () => null } },
       scales: { x: { time: false, auto: false, min: 0, max: p.window }, y: { distr: log ? 3 : 1, auto: false, min: log ? EMPTY_BIN : 0, max: 10 } },
       axes: [
-        { ...AXIS, label: 'Time after the pulse starts (ns). Red: pulse on' },
+        { ...AXIS, label: 'Time after the pulse starts (ns)' },
         { ...AXIS, label: 'Photons per bin', size: Y_AXIS_SIZE },
       ],
       series: [{}, ...piles.map((pile, i) => ({
@@ -521,6 +521,10 @@ export function mount(root) {
       };
       legend.append(item);
     });
+    const band = document.createElement('div');
+    band.style.cursor = 'default';
+    band.innerHTML = '<i style="background:rgba(255,33,0,0.55); height:10px"></i>Pulse on (laser)';
+    legend.append(band);
     const ex = document.createElement('div');
     ex.className = 'exact-legend';
     ex.style.cursor = 'default';

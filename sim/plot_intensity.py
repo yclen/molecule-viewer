@@ -17,6 +17,8 @@ from pathlib import Path
 import numpy as np
 
 INK, MUTED, GRID, BASE = '#52514e', '#898781', '#e1e0d9', '#c3c2b7'  # the same as plot_pulse.py
+AXIS_LABEL = {'color': '#2c2b29', 'fontsize': 14, 'fontweight': 'bold'}  # axis titles: big enough to read the unit
+TICK_SIZE = 12
 DPA, PERYLENE = '#2a78d6', '#11d8f2'
 SHADES = ['#85b7eb', '#5598e7', '#2a78d6', '#185fa5', '#042c53']  # one hue, light to dark: one ordered parameter
 CATEGORICAL = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4']  # anything else, always in this order
@@ -115,18 +117,18 @@ def local_slope(rows):
     return np.exp(x[ok]), np.gradient(y[ok], x[ok])
 
 
-def style(ax, logx, logy=False, xlabel='kExc, /ns'):
+def style(ax, logx, logy=False, xlabel='kExc (/ns)'):
     ax.set_xscale('log' if logx else 'linear')
     ax.set_yscale('log' if logy else 'linear')
     if xlabel:
-        ax.set_xlabel(f"{xlabel}{' (log scale)' if logx else ''}", color=MUTED)
+        ax.set_xlabel(f"{xlabel}{', log scale' if logx else ''}", **AXIS_LABEL)
     ax.grid(color=GRID, lw=1, which='major')
     ax.set_axisbelow(True)
     for side in ('top', 'right'):
         ax.spines[side].set_visible(False)
     for side in ('bottom', 'left'):
         ax.spines[side].set_color(BASE)
-    ax.tick_params(colors=MUTED, which='both')
+    ax.tick_params(colors=INK, which='both', labelsize=TICK_SIZE)
 
 
 def shared(found, name):
@@ -194,7 +196,7 @@ def draw(fig, kind, folders, logx=None, per_mw=None):
     fig.clear()
     fig.hover_unit = ''  # what the hover readout puts after a value
     scale = 1 / per_mw if per_mw else 1.0  # x axis value per unit of kExc
-    xlabel = 'Laser power, mW' if per_mw else 'kExc, /ns'
+    xlabel = 'Laser power (mW)' if per_mw else 'kExc (/ns)'
     fig.hover_x = ('Power', 'mW') if per_mw else ('kExc', '/ns')
     fig.set_facecolor('white')
     points = {}
@@ -202,7 +204,7 @@ def draw(fig, kind, folders, logx=None, per_mw=None):
         top, low = fig.subplots(2, 1, sharex=True, gridspec_kw={'height_ratios': [3, 1.3]})
         points[top] = sum((plot_curve(top, c, photons, photons_se, split, scale) for c in found), [])
         style(top, True, True, xlabel=False)
-        top.set_ylabel('Photons per molecule (log scale)', color=MUTED)
+        top.set_ylabel('Photons per molecule', **AXIS_LABEL)
         for c in found:
             x, slope = local_slope(c['exact'] or c['mc'])
             if x is not None:
@@ -214,16 +216,16 @@ def draw(fig, kind, folders, logx=None, per_mw=None):
             low.text(1.005, level, text, color=MUTED, fontsize=8, va='center', transform=low.get_yaxis_transform())
         style(low, True, xlabel=xlabel)
         low.set_ylim(-0.15, 2.3)
-        low.set_ylabel('Local slope', color=MUTED)
+        low.set_ylabel('Slope', **AXIS_LABEL)
         legend_ax = top
     else:
         ax = fig.subplots()
         if kind == 'counts':
             points[ax] = sum((plot_curve(ax, c, photons, photons_se, split, scale) for c in found), [])
-            ax.set_ylabel('Photons per molecule, per pulse', color=MUTED)
+            ax.set_ylabel('Photons per molecule', **AXIS_LABEL)
         else:
             points[ax] = sum((plot_curve(ax, c, yield_percent, yield_percent_se, scale=scale) for c in found), [])
-            ax.set_ylabel('Quantum yield (%), photons per excitation', color=MUTED)
+            ax.set_ylabel('Quantum yield (%)', **AXIS_LABEL)
             fig.hover_unit = '%'
             triplet, f = shared(found, 'tripletYield'), shared(found, 'f')
             if triplet is not None and f is not None:
@@ -243,12 +245,12 @@ def draw(fig, kind, folders, logx=None, per_mw=None):
     top_axis = None
     if per_mw:  # power along the bottom, and the kExc it gives along the top
         top_axis = first.secondary_xaxis('top', functions=(lambda x: x * per_mw, lambda k: k / per_mw))
-        top_axis.set_xlabel(f'kExc, /ns, at {per_mw:g} /ns per mW', color=MUTED)
+        top_axis.set_xlabel(f'kExc (/ns), at {per_mw:g} /ns per mW', **AXIS_LABEL)
     elif duration:  # the same pulse in every curve, so kExc also reads as absorptions per pulse
         top_axis = first.secondary_xaxis('top', functions=(lambda k: k * duration, lambda a: a / duration))
-        top_axis.set_xlabel('kExc × pulse: absorptions per pulse if the sensitizer were always free', color=MUTED)
+        top_axis.set_xlabel('Absorptions per pulse (kExc × pulse length)', **AXIS_LABEL)
     if top_axis is not None:
-        top_axis.tick_params(colors=MUTED, which='both')
+        top_axis.tick_params(colors=INK, which='both', labelsize=TICK_SIZE)
         top_axis.spines['top'].set_color(BASE)
     handles, labels = legend_ax.get_legend_handles_labels()
     if len(handles) > 1:

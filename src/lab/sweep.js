@@ -686,7 +686,7 @@ function chart(holder, runs, kind, { logx = false, perMw = null, title = null })
   logx = logx || isLogK;
   const split = found.length === 1 && kind !== 'preview';
   const scale = perMw ? 1 / perMw : 1;
-  const xlabel = perMw ? 'Laser power, mW' : 'kExc, /ns';
+  const xlabel = perMw ? 'Laser power (mW)' : 'kExc (/ns)';
   const isYield = kind === 'yield' || kind === 'yield_log';
   const logy = kind === 'counts_log' || kind === 'preview';
   const yOf = isYield ? (rows) => rows.map((r) => (100 * r.photons_per_molecule) / r.excitations_per_molecule) : (rows) => column(rows, 'photons_per_molecule');
@@ -695,7 +695,7 @@ function chart(holder, runs, kind, { logx = false, perMw = null, title = null })
 
   // one table per line: exact, Monte Carlo, and (one curve) the perylene and DPA parts
   const tables = [];
-  const series = [{ label: perMw ? 'Power, mW' : 'kExc, /ns', value: (u, v) => (v == null ? '–' : fmt(v, 4)) }];
+  const series = [{ label: perMw ? 'Power (mW)' : 'kExc (/ns)', value: (u, v) => (v == null ? '–' : fmt(v, 4)) }];
   const errorBars = [];
   for (const c of found) {
     for (const how of ['exact', 'mc']) {
@@ -725,8 +725,8 @@ function chart(holder, runs, kind, { logx = false, perMw = null, title = null })
   let topAxis = null;
   const topTicks = (by) => (logx ? { filter: logAxis().filter, values: (u, sp) => sp.map((v) => (v == null ? '' : fmt(v * by, 3))) }
     : { values: (u, sp) => sp.map((v) => fmt(v * by, 3)) });
-  if (perMw) topAxis = { ...AXIS, scale: 'x', side: 0, grid: { show: false }, label: `kExc, /ns, at ${fmt(perMw, 4)} /ns per mW`, ...topTicks(perMw) };
-  else if (duration && kind !== 'preview') topAxis = { ...AXIS, scale: 'x', side: 0, grid: { show: false }, label: 'kExc × pulse: absorptions per pulse if the sensitizer were always free', ...topTicks(duration) };
+  if (perMw) topAxis = { ...AXIS, scale: 'x', side: 0, grid: { show: false }, label: `kExc (/ns), at ${fmt(perMw, 4)} /ns per mW`, ...topTicks(perMw) };
+  else if (duration && kind !== 'preview') topAxis = { ...AXIS, scale: 'x', side: 0, grid: { show: false }, label: 'Absorptions per pulse (kExc × pulse length)', ...topTicks(duration) };
 
   const triplet = shared(found, 'tripletYield');
   const f = shared(found, 'f');
@@ -783,8 +783,8 @@ function chart(holder, runs, kind, { logx = false, perMw = null, title = null })
     }],
   };
 
-  const yLabel = kind === 'counts_log' ? 'Photons per molecule' : kind === 'counts' ? 'Photons per molecule, per pulse'
-    : kind === 'preview' ? 'Photons per molecule' : 'Quantum yield (%), photons per excitation';
+  const yLabel = kind === 'counts_log' || kind === 'preview' || kind === 'counts' ? 'Photons per molecule'
+    : 'Quantum yield (%)';
   let yMax = null;
   if (limit != null) yMax = limit * 1.12;
   const xs = data[0].filter((v) => v > 0);
@@ -812,7 +812,7 @@ function chart(holder, runs, kind, { logx = false, perMw = null, title = null })
       y: { distr: logy ? 3 : 1, range: (u, min, max) => (logy ? [min / 1.6, max * 1.6] : [0, yMax ?? max * 1.08]) },
     },
     axes: [
-      { ...AXIS, ...(logx ? logAxis() : {}), label: parts.length > 1 ? undefined : `${xlabel}${logx ? ' (log scale)' : ''}`,
+      { ...AXIS, ...(logx ? logAxis() : {}), label: parts.length > 1 ? undefined : `${xlabel}${logx ? ', log scale' : ''}`,
         labelSize: parts.length > 1 ? 0 : AXIS.labelSize, ...(parts.length > 1 ? { values: (u, sp) => sp.map(() => ''), size: 10 } : {}) },
       { ...AXIS, label: yLabel, size: Y_AXIS_SIZE, ...(logy ? logAxis() : {}) },
       ...(topAxis ? [topAxis] : []),
@@ -830,7 +830,7 @@ function chart(holder, runs, kind, { logx = false, perMw = null, title = null })
       legend: { show: false },
       cursor: { sync: { key: sync.key }, points: { size: 6 } },
       scales: { x: { time: false, distr: 3, auto: false, range: () => xRange }, y: { auto: false, range: () => [-0.15, 2.3] } },
-      axes: [{ ...AXIS, ...logAxis(), label: `${xlabel} (log scale)` }, { ...AXIS, label: 'Slope', size: Y_AXIS_SIZE, splits: () => [0, 1, 2] }],
+      axes: [{ ...AXIS, ...logAxis(), label: `${xlabel}, log scale` }, { ...AXIS, label: 'Slope', size: Y_AXIS_SIZE, splits: () => [0, 1, 2] }],
       series: [{}, ...slopes.map(({ c }) => ({ label: `${c.label || 'Local'} slope`, stroke: c.colour, width: 2, spanGaps: true, points: { show: true, size: 5, fill: c.colour } }))],
       hooks: { drawClear: [(u) => {
         const { ctx } = u;

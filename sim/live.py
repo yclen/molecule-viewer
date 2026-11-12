@@ -366,6 +366,21 @@ def panel(title=None, name='panel'):
     return frame, layout
 
 
+AXIS_TITLE = {'color': '#e8edf3', 'font-size': '15pt', 'font-weight': '600'}  # big and bright: units read at a glance
+AXIS_TICK_PT = 12
+
+
+def big_axes(plot, left, bottom):
+    """Axis titles (each ending in its unit) and tick numbers large and bright enough to read at a glance."""
+    font = QtGui.QFont('Segoe UI', AXIS_TICK_PT)
+    for side, title in (('left', left), ('bottom', bottom)):
+        axis = plot.getAxis(side)
+        axis.setPen(pg.mkPen('#3a4554'))
+        axis.setTextPen(pg.mkPen('#d6dde6'))
+        axis.setStyle(tickFont=font, tickTextOffset=6)
+        axis.setLabel(title, **AXIS_TITLE)
+
+
 class Lamp(QtWidgets.QLabel):
     """A status light with its name beside it."""
 
@@ -770,13 +785,9 @@ class Window(QtWidgets.QMainWindow):
         box.setContentsMargins(6, 8, 10, 6)
         self.plot = pg.PlotWidget()
         self.plot.showGrid(x=True, y=True, alpha=0.12)
-        self.plot.setLabel('left', 'Photons per bin')
-        self.plot.setLabel('bottom', 'Time after the pulse starts (ns). Red: pulse on')
+        big_axes(self.plot, 'Photons per bin', 'Time after the pulse starts (ns)')
         self.plot.setMouseEnabled(x=True, y=False)
-        for side in ('left', 'bottom'):
-            self.plot.getAxis(side).setPen(pg.mkPen('#3a4554'))
-            self.plot.getAxis(side).setTextPen(pg.mkPen(MUTED))
-        self.plot.addLegend(offset=(-20, 12), labelTextColor=TEXT, labelTextSize='10pt', brush=pg.mkBrush(BG + 'cc'),
+        self.plot.addLegend(offset=(-20, 12), labelTextColor=TEXT, labelTextSize='12pt', brush=pg.mkBrush(BG + 'cc'),
                             pen=pg.mkPen(EDGE))
         self.band = pg.LinearRegionItem((0, 1), movable=False, brush=pg.mkBrush(255, 33, 0, 46), pen=pg.mkPen(None))
         self.band.setZValue(-10)
@@ -811,7 +822,7 @@ class Window(QtWidgets.QMainWindow):
         bar = QtWidgets.QHBoxLayout()
         bar.setContentsMargins(8, 0, 0, 0)
         bar.addWidget(label('HISTOGRAM', 'section'))
-        bar.addWidget(label('drag to pan  ·  scroll to zoom  ·  click a legend entry to hide it', 'note'))
+        bar.addWidget(label('red band: pulse on  ·  drag to pan  ·  scroll to zoom  ·  click a legend entry to hide it', 'note'))
         bar.addStretch()
         self.auto_button = QtWidgets.QPushButton('↕  AUTO Y')
         self.auto_button.setObjectName('step')
