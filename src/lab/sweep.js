@@ -9,7 +9,10 @@ import { EVENTS, N_EVENTS, PULSE_DEFAULTS, resolve } from '../sim/rules.js';
 import ExactWorker from './exact-worker.js?worker&inline';
 import McWorker from './mc-worker.js?worker&inline';
 import { defaultValues, FIELDS, fmt, int, kexcPerMw, parseValues, rulesFor, TTA_FIELDS } from './model.js';
-import { deleteRun, escapeHtml, fromCsv, listRuns, putRun, saveLocation, saveRun, stamp, toCsv } from './store.js';
+import {
+  deleteRun, destination, escapeHtml, folderAccess, fromCsv, listFolderRuns, listRuns, makeRunFolder, onFolderChange, putRun,
+  saveLocation, saveRun, stamp, toCsv,
+} from './store.js';
 
 const EXACT_MAX_N = 8;
 const THREADS = Math.min(8, Math.max(1, Math.floor((navigator.hardwareConcurrency || 2) / 2)));
@@ -113,7 +116,7 @@ const TEMPLATE = (v) => `
   <div class="lab-main">
     <section class="panel" style="display:flex; flex-direction:column; flex: 0 1 34%; min-height: 160px">
       <div class="section">Intensity runs <span class="hint">click to pick · Ctrl or Shift for several</span></div>
-      <div class="runs-box"><table class="runs"><thead><tr><th>Run</th><th>Date</th><th>Rows</th><th>Swept</th><th>Method</th><th>n</th><th>Pulse, ns</th></tr></thead><tbody data-id="runs"></tbody></table></div>
+      <div class="runs-box"><table class="runs"><thead><tr><th>Run</th><th>Date</th><th>Rows</th><th>Swept</th><th>Method</th><th>n</th><th>Pulse, ns</th><th>Kept in</th></tr></thead><tbody data-id="runs"></tbody></table></div>
     </section>
     <section class="panel plot-panel"><div class="plot-title" data-id="plotTitle"></div><div class="plots" data-id="plots"><div class="empty">Pick a run, then a plot.</div></div></section>
   </div>
@@ -128,13 +131,18 @@ const TEMPLATE = (v) => `
     </section>
     <section class="panel stack">
       <div class="section" style="margin:0">Files</div>
+      <button data-id="connect" hidden>Show the runs in your folder</button>
       <button data-id="saveRun">Save the run</button>
       <button data-id="import">Import a results.csv…</button>
       <input type="file" data-id="file" accept=".csv,.json" multiple hidden>
+      <button data-id="refresh">Refresh the list</button>
       <button data-id="delete">Delete from this browser</button>
       <div data-id="where"></div>
-      <div class="note">Runs live in this browser until you delete them. Saving writes results.csv and params.json, like
-        sim/data. Import takes a results.csv from here or from the Python app (with its params.json, if you pick both).</div>
+      <div class="caption" data-id="filesNote"></div>
+      <div class="note">With a folder chosen, each sweep is written into it as it runs (results.csv and params.json, the
+        layout of sim/data), and every sweep already in it is listed here, the Python app's too. Without one, sweeps
+        are kept in this browser, and Save the run downloads them. Import takes a results.csv (with its params.json, if
+        you pick both).</div>
     </section>
   </aside>
 </div>`;
@@ -303,13 +311,23 @@ export function mount(root) {
       checks = new Set(Array.from({ length: cfg.checks }, (_, i) => Math.round(((i + 1) * (points.length - 1)) / (cfg.checks + 1))));
     }
     const swept = Object.fromEntries(Object.entries(lists).filter(([, l]) => l.length > 1).map(([k, l]) => [k, [...new Set(l)].sort((a, b) => a - b)]));
+    // a folder picked: the sweep is written there as it runs (access is asked for now, while this is still a click)
+    let sink = null;
+    const wantFolder = !!destination();
+    if (wantFolder && (await folderAccess(true))) {
+      try {
+        sink = await makeRunFolder(`${stamp().day}_${cfg.name}`);
+      } catch {
+        sink = null;
+      }
+    }
     const { day, time } = stamp();
     const runs = await listRuns();
-    let id = `${day}_${cfg.name}`;
-    for (let k = 2; runs.some((r) => r.id === id); k++) id = `${day}_${cfg.name}_${k}`;
+    let id = sink ? sink.name : `${day}_${cfg.name}`;
+    if (!sink) for (let k = 2; runs.some((r) => r.id === id); k++) id = `${day}_${cfg.name}_${k}`;
     const seed = crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000_000;
     const record = {
-      id, date: `${day} ${time}`, rows: [],
+      id, date: `${day} ${time}`, rows: [], where: sink ? 'folder' : 'browser',
       params: { mode: 'intensity', command: cfg.command, date: `${day} ${time}`, units: 'times in ns, rates per ns',
         defaults: PULSE_DEFAULTS, swept, points: points.length, method: cfg.method, checks: [...checks].sort((a, b) => a - b),
         precision: cfg.precision, max_seconds: cfg.maxSeconds, batch: BATCH, seed, threads: THREADS,
@@ -321,7 +339,24 @@ export function mount(root) {
     $('log').textContent = '';
     setLamp('#f2a93b', 'RUNNING');
     const started = performance.now();
-    await putRun(record);
+    const place = () => (sink ? `📁 ${sink.where}` : `this browser as ${id}`);
+    /** Keep what's finished: rewrite results.csv in the folder, or store the run in the browser. */
+    const keep = async () => {
+      if (sink) {
+        try {
+          if (!record.rows.length) await sink.write('params.json', JSON.stringify(record.params, null, 2));
+          else await sink.write('results.csv', toCsv(record.rows));
+          return;
+        } catch {
+          sink = null; // the folder went away: keep going in the browser
+          record.where = 'browser';
+        }
+      }
+      await putRun(record);
+    };
+    await keep();
+    if (wantFolder && !sink) $('log').textContent += 'Could not write to the folder, so this sweep is kept in the browser.\n';
+    $('log').textContent += `Saving to ${place()}\n`;
     try {
       for (let i = 0; i < points.length; i++) {
         const p = points[i];
@@ -341,25 +376,28 @@ export function mount(root) {
           }
           const row = { point: i, method: how, ...p, ...found, wall_s: (performance.now() - began) / 1000 };
           record.rows.push(row);
-          await putRun(record); // a stopped sweep keeps what it finished
+          await keep(); // a stopped sweep keeps what it finished
           $('log').textContent += `point ${i + 1}/${points.length} ${how} kExc ${fmt(p.kExc, 4)} photons ${fmt(row.photons_per_molecule, 4)} in ${row.wall_s.toFixed(1)} s\n`;
           $('log').scrollTop = 1e9;
           $('bar').style.width = `${(100 * (i + 1)) / points.length}%`;
           drawPreview(record);
         }
       }
-      $('progress').textContent = `Done: ${points.length} point${points.length > 1 ? 's' : ''} in ${((performance.now() - started) / 1000).toFixed(1)} s. Saved in this browser as ${id}; see the Plot tab.`;
+      $('progress').textContent = `Done: ${points.length} point${points.length > 1 ? 's' : ''} in ${((performance.now() - started) / 1000).toFixed(1)} s. Saved in ${place()}; see the Plot tab.`;
       setLamp('#2fd27a', 'DONE');
     } catch (error) {
       if (error.message === 'stopped') {
-        $('progress').textContent = `Stopped. ${record.rows.length} row${record.rows.length === 1 ? '' : 's'} kept as ${id}.`;
+        $('progress').textContent = `Stopped. ${record.rows.length} row${record.rows.length === 1 ? '' : 's'} kept in ${place()}.`;
         setLamp(null, 'STOPPED');
       } else {
         $('progress').textContent = `Failed: ${error.message}`;
         setLamp('#ff2100', 'FAILED');
       }
     }
-    if (!record.rows.length) await deleteRun(id);
+    if (!record.rows.length) {
+      if (sink) await sink.remove().catch(() => {}); // only its params.json: tidy it away
+      else await deleteRun(id);
+    }
     job = null;
     $('stop').disabled = true;
     check();
@@ -399,11 +437,16 @@ export function mount(root) {
   let charts = [];
   let lastClicked = null;
 
+  const keyOf = (r) => `${r.where ?? 'browser'}:${r.id}`;
   async function refreshRuns() {
-    runs = (await listRuns()).filter((r) => r.rows.length).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-    for (const id of [...picked]) if (!runs.some((r) => r.id === id)) picked.delete(id);
+    const inFolder = await listFolderRuns();
+    const inBrowser = (await listRuns()).map((r) => ({ ...r, where: 'browser' }));
+    runs = [...inFolder, ...inBrowser].filter((r) => r.rows.length)
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+    $('connect').hidden = !destination() || (await folderAccess());
+    for (const key of [...picked]) if (!runs.some((r) => keyOf(r) === key)) picked.delete(key);
     const body = $('runs');
-    body.innerHTML = runs.length ? '' : '<tr><td colspan="7" style="color:var(--dim)">No runs yet. Run a sweep, or import a results.csv.</td></tr>';
+    body.innerHTML = runs.length ? '' : '<tr><td colspan="8" style="color:var(--dim)">No runs yet. Run a sweep, choose a folder that has some, or import a results.csv.</td></tr>';
     runs.forEach((r, i) => {
       const rows = r.rows;
       const tr = document.createElement('tr');
@@ -413,21 +456,22 @@ export function mount(root) {
       };
       const methods = [...new Set(rows.map((x) => x.method))].join(' + ');
       tr.innerHTML = `<td>${escapeHtml(r.id)}</td><td>${escapeHtml((r.date || '').slice(0, 16))}</td><td>${rows.length}</td>
-        <td>${escapeHtml(Object.keys(r.params?.swept ?? {}).join(' '))}</td><td>${escapeHtml(methods)}</td><td>${shared('n')}</td><td>${shared('duration')}</td>`;
-      tr.classList.toggle('sel', picked.has(r.id));
+        <td>${escapeHtml(Object.keys(r.params?.swept ?? {}).join(' '))}</td><td>${escapeHtml(methods)}</td><td>${shared('n')}</td><td>${shared('duration')}</td>
+        <td title="${r.where === 'folder' ? escapeHtml(`${destination()}/${r.id}`) : 'In this browser only'}">${r.where === 'folder' ? `📁 ${escapeHtml(destination() ?? 'folder')}` : 'browser'}</td>`;
+      tr.classList.toggle('sel', picked.has(keyOf(r)));
       tr.addEventListener('click', (e) => {
         if (e.shiftKey && lastClicked != null) {
           const [a, b] = [lastClicked, i].sort((x, y) => x - y);
-          for (let k = a; k <= b; k++) picked.add(runs[k].id);
+          for (let k = a; k <= b; k++) picked.add(keyOf(runs[k]));
         } else if (e.ctrlKey || e.metaKey) {
-          if (picked.has(r.id)) picked.delete(r.id);
-          else picked.add(r.id);
+          if (picked.has(keyOf(r))) picked.delete(keyOf(r));
+          else picked.add(keyOf(r));
         } else {
           picked.clear();
-          picked.add(r.id);
+          picked.add(keyOf(r));
         }
         lastClicked = i;
-        for (const [k, row] of [...body.children].entries()) row.classList.toggle('sel', picked.has(runs[k]?.id));
+        for (const [k, row] of [...body.children].entries()) row.classList.toggle('sel', !!runs[k] && picked.has(keyOf(runs[k])));
         kind ??= 'counts_log';
         drawPicked();
       });
@@ -445,7 +489,7 @@ export function mount(root) {
     const holder = $('plots');
     holder.innerHTML = '';
     for (const b of root.querySelectorAll('[data-kind]')) b.setAttribute('aria-pressed', b.dataset.kind === kind);
-    const chosen = runs.filter((r) => picked.has(r.id));
+    const chosen = runs.filter((r) => picked.has(keyOf(r)));
     if (!chosen.length || !kind) {
       $('plotTitle').textContent = '';
       holder.innerHTML = `<div class="empty">${runs.length ? 'Pick a run, then a plot.' : 'No runs yet.'}</div>`;
@@ -466,20 +510,40 @@ export function mount(root) {
     });
   for (const id of ['logx', 'perMw', 'kpm']) $(id).addEventListener('change', drawPicked);
 
+  const note = (text) => ($('filesNote').textContent = text);
   $('saveRun').addEventListener('click', async () => {
-    const chosen = runs.filter((r) => picked.has(r.id));
-    if (!chosen.length) return;
-    for (const r of chosen) {
+    const chosen = runs.filter((r) => picked.has(keyOf(r)));
+    if (!chosen.length) return note('Pick a run first.');
+    const fromBrowser = chosen.filter((r) => r.where !== 'folder');
+    if (!fromBrowser.length) return note('Already saved: those runs are files in your folder.');
+    const where = [];
+    for (const r of fromBrowser) {
       try {
-        await saveRun(r.id, [{ name: 'results.csv', data: toCsv(r.rows) }, { name: 'params.json', data: JSON.stringify(r.params, null, 2) }]);
+        where.push(await saveRun(r.id, [{ name: 'results.csv', data: toCsv(r.rows) },
+          { name: 'params.json', data: JSON.stringify(r.params, null, 2) }]));
       } catch {
-        return;
+        return note('Not saved.');
       }
     }
+    note(`Saved to ${where.join(', ')}.`);
+    refreshRuns().then(drawPicked);
   });
+  $('connect').addEventListener('click', async () => {
+    if (await folderAccess(true)) {
+      await refreshRuns();
+      drawPicked();
+    }
+  });
+  $('refresh').addEventListener('click', async () => {
+    await refreshRuns();
+    drawPicked();
+  });
+  onFolderChange(() => refreshRuns().then(drawPicked));
   $('delete').addEventListener('click', async () => {
-    const chosen = runs.filter((r) => picked.has(r.id));
-    if (!chosen.length || !confirm(`Delete ${chosen.length === 1 ? chosen[0].id : `${chosen.length} runs`} from this browser? Saved files aren't touched.`)) return;
+    const all = runs.filter((r) => picked.has(keyOf(r)));
+    const chosen = all.filter((r) => r.where !== 'folder');
+    if (all.length && !chosen.length) return note('Runs in your folder are files: delete their folders on your computer if you want them gone.');
+    if (!chosen.length || !confirm(`Delete ${chosen.length === 1 ? chosen[0].id : `${chosen.length} runs`} from this browser? Files on your computer aren't touched.`)) return;
     for (const r of chosen) await deleteRun(r.id);
     picked.clear();
     await refreshRuns();
@@ -506,10 +570,10 @@ export function mount(root) {
     const { day, time } = stamp();
     const base = csv.name.replace(/\.csv$/i, '') === 'results' ? `imported_${day}` : csv.name.replace(/\.csv$/i, '');
     let id = base;
-    for (let k = 2; runs.some((r) => r.id === id); k++) id = `${base}_${k}`;
+    for (let k = 2; runs.some((r) => r.where !== 'folder' && r.id === id); k++) id = `${base}_${k}`;
     await putRun({ id, date: params.date || `${day} ${time}`, rows, params });
     picked.clear();
-    picked.add(id);
+    picked.add(`browser:${id}`);
     kind ??= 'counts_log';
     await refreshRuns();
     drawPicked();

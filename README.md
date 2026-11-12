@@ -66,15 +66,17 @@ the slope is 2, because an upconverted photon needs two absorbed photons, one fo
 
 ### Saving your data
 
-Saved runs come out as the same files the Python version writes (`results.csv`, `params.json`, …), so they open in
+Runs are saved as the same files the Python version writes (`results.csv`, `params.json`, …), so they open in
 Excel, Python or anything else.
 
-- **Any browser:** each save downloads as one `.zip`.
-- **Chrome or Edge:** click **Choose a folder…** under Save, and runs are written straight into that folder. Pick a
-  folder that Google Drive, Dropbox or OneDrive syncs, and your runs land there.
-
-Sweeps are also kept in your browser, so the Plot list is still there next time. **Import** loads a `results.csv`,
-including ones from the Python app.
+- **Chrome or Edge: work in a folder on your computer.** Click **Choose a folder…** under Save. From then on, each
+  sweep writes itself into that folder as it runs (one subfolder per run, like `sim/data`), Pulse saves go there
+  too, and the Sweep tab's Plot list shows every sweep already in the folder. Choose this project's `sim/data` folder
+  and the website and the Python app see each other's runs. Choose a folder that Google Drive, Dropbox or OneDrive
+  syncs, and your runs land there. The browser remembers the folder, and asks once per visit to use it again.
+- **Any browser:** without a folder, sweeps are kept in the browser (so the Plot list survives a reload, on that
+  browser only), and **Save** downloads a run as one `.zip`. **Import** loads a `results.csv`, including ones from the
+  Python app.
 
 ## The model
 

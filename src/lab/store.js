@@ -119,30 +119,81 @@ export async function useDownloads() {
 }
 
 export const destination = () => (folder ? folder.name : null);
+export const onFolderChange = (f) => listeners.add(f);
+
+/**
+ * Whether the page may read and write the picked folder. The browser remembers the folder between visits but asks
+ * again for permission; `ask` shows that prompt, which only works straight after a click.
+ */
+export async function folderAccess(ask = false) {
+  if (!folder) return false;
+  try {
+    if ((await folder.queryPermission({ mode: 'readwrite' })) === 'granted') return true;
+    return ask && (await folder.requestPermission({ mode: 'readwrite' })) === 'granted';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A new run folder `name` inside the picked folder (`name_2`, `name_3`... if taken, as sim/ does). Returns
+ * { name, where, write(fileName, data) }; write replaces the file each time, so a run can be saved as it goes.
+ */
+export async function makeRunFolder(name) {
+  let dir = name;
+  for (let k = 2; ; k++) {
+    try {
+      await folder.getDirectoryHandle(dir);
+      dir = `${name}_${k}`;
+    } catch {
+      break;
+    }
+  }
+  const sub = await folder.getDirectoryHandle(dir, { create: true });
+  return {
+    name: dir,
+    where: `${folder.name}/${dir}`,
+    async write(fileName, data) {
+      const writable = await (await sub.getFileHandle(fileName, { create: true })).createWritable();
+      await writable.write(data);
+      await writable.close();
+    },
+    /** Remove this run folder again: only for one this page just made and never filled. */
+    remove: () => folder.removeEntry(dir, { recursive: true }),
+  };
+}
+
+const readText = async (dir, name) => (await (await dir.getFileHandle(name)).getFile()).text();
+
+/**
+ * Every intensity sweep in the picked folder: each subfolder whose params.json says mode "intensity" and that has a
+ * results.csv. The website's sweeps and the Python app's (sim/data) have the same layout, so both show.
+ */
+export async function listFolderRuns() {
+  if (!(await folderAccess())) return [];
+  const runs = [];
+  for await (const [name, handle] of folder.entries()) {
+    if (handle.kind !== 'directory') continue;
+    try {
+      const params = JSON.parse(await readText(handle, 'params.json'));
+      if (params.mode !== 'intensity') continue;
+      const rows = fromCsv(await readText(handle, 'results.csv')).map((r) => ({ ...r, method: String(r.method ?? 'exact') }));
+      runs.push({ id: name, date: params.date ?? '', params, rows, where: 'folder' });
+    } catch {
+      // not a run folder, or one still being written
+    }
+  }
+  return runs;
+}
 
 /** Save a run's files: into the picked folder (as a subfolder `name`), or as `name`.zip. Returns where it went. */
 export async function saveRun(name, files) {
   if (folder) {
     try {
-      if ((await folder.queryPermission({ mode: 'readwrite' })) !== 'granted'
-        && (await folder.requestPermission({ mode: 'readwrite' })) !== 'granted')
-        throw new Error('no permission');
-      let dir = name;
-      for (let k = 2; ; k++) {
-        try {
-          await folder.getDirectoryHandle(dir);
-          dir = `${name}_${k}`; // already there: like sim/, add _2, _3...
-        } catch {
-          break;
-        }
-      }
-      const sub = await folder.getDirectoryHandle(dir, { create: true });
-      for (const file of files) {
-        const writable = await (await sub.getFileHandle(file.name, { create: true })).createWritable();
-        await writable.write(file.data);
-        await writable.close();
-      }
-      return `${folder.name}/${dir}`;
+      if (!(await folderAccess(true))) throw new Error('no permission');
+      const run = await makeRunFolder(name);
+      for (const file of files) await run.write(file.name, file.data);
+      return run.where;
     } catch (error) {
       if (error.name === 'AbortError') throw error;
       // the folder went away or permission was refused: fall back to a download
@@ -160,13 +211,22 @@ export function saveLocation() {
     const where = destination();
     box.innerHTML = `<span>Saves go to</span> <b>${where ? `📁 ${escapeHtml(where)}` : 'Downloads (.zip)'}</b>`;
     if (canPickFolder) {
-      const change = document.createElement('button');
-      change.className = 'link';
-      change.textContent = where ? 'Use downloads' : 'Choose a folder…';
-      change.title = where ? 'Download each run as a .zip instead'
-        : 'Write runs straight into a folder, such as one Google Drive or Dropbox syncs (Chrome and Edge)';
-      change.onclick = () => (where ? useDownloads() : pickFolder().catch(() => {}));
-      box.append(change);
+      const link = (text, title, act) => {
+        const b = document.createElement('button');
+        b.className = 'link';
+        b.textContent = text;
+        b.title = title;
+        b.onclick = act;
+        box.append(b);
+      };
+      const choose = () => pickFolder().catch(() => {});
+      if (where) {
+        link('Change…', 'Pick another folder', choose);
+        link('Use downloads', 'Download each run as a .zip instead', useDownloads);
+      } else {
+        link('Choose a folder…', 'Save runs straight into a folder on this computer, and open the sweeps already in it. '
+          + 'A folder Google Drive or Dropbox syncs works too (Chrome and Edge)', choose);
+      }
     }
   };
   listeners.add(render);
