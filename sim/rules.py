@@ -7,6 +7,9 @@ Times are in ns and rates per ns.
 
 A rule rewrites one site, or two sites, at a rate per ns. There is no time step: the engine adds up the rates of
 every rule that can fire, waits a random time, and fires one of them (see engine.py).
+
+The website runs a JavaScript port of this file and engine.py (src/sim/). After changing the model here, make the
+same change there and run `python tools/check_js_engine.py`, which compares the two.
 """
 
 import json

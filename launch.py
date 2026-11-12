@@ -1,7 +1,7 @@
 """One launcher for every part of the project. Needs only Python 3.10 or newer.
 
   python launch.py            a menu
-  python launch.py viewer     the 3D molecule viewer, in your browser
+  python launch.py viewer     the website (viewer, pulse experiment, sweep), in your browser
   python launch.py live       the live pulse experiment window
   python launch.py sweep      the intensity sweep window
 
@@ -25,7 +25,7 @@ STAMP = VENV / 'requirements.sha256'  # what was installed, so an edited require
 VIEWER_URL = 'https://yclen.github.io/molecule-viewer/'
 
 APPS = {
-    'viewer': ('Molecule Viewer', '3D molecules, excited states and on-molecule simulations (browser)'),
+    'viewer': ('The website', 'the viewer, pulse experiment and sweep, all in your browser'),
     'live': ('Live pulse experiment', 'flash molecules and watch the photon histogram build up'),
     'sweep': ('Intensity sweep', 'run photons and quantum yield against laser power, then plot them'),
 }

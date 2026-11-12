@@ -140,6 +140,11 @@ export class MoleculeViewer {
     renderer.setAnimationLoop(() => this._tick());
   }
 
+  /** Stop drawing while another app tab is showing, and start again when it comes back. */
+  setPaused(paused) {
+    this.renderer.setAnimationLoop(paused ? null : () => this._tick());
+  }
+
   // ----------------------------------------------------------------------
   // Public API
   // ----------------------------------------------------------------------

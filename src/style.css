@@ -7,6 +7,7 @@
   --muted: #8d95a6;
   --accent: #5b9dff;
   --hover: rgba(255, 255, 255, 0.07);
+  --topbar: 40px;
   color-scheme: dark;
 }
 
@@ -21,16 +22,16 @@ html, body {
   font: 13px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
-#viewport { position: fixed; inset: 0; }
+#viewport { position: fixed; inset: var(--topbar) 0 0 0; }
 #viewport canvas { display: block; outline: none; }
 
 /* ---------- side panel ---------- */
 #panel {
   position: fixed;
-  top: 16px;
+  top: calc(var(--topbar) + 12px);
   left: 16px;
   width: 300px;
-  max-height: calc(100% - 32px);
+  max-height: calc(100% - var(--topbar) - 24px);
   overflow-y: auto;
   background: var(--panel);
   backdrop-filter: blur(12px);
@@ -267,7 +268,7 @@ code {
 /* ---------- overlays ---------- */
 #empty-state {
   position: fixed;
-  inset: 0;
+  inset: var(--topbar) 0 0 0;
   display: grid;
   place-items: center;
   color: var(--muted);
@@ -314,3 +315,39 @@ code {
 }
 
 [hidden] { display: none !important; }
+
+/* ---------- the app tabs along the top ---------- */
+#apptabs {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: var(--topbar);
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 0 12px;
+  background: #0b0f15;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  z-index: 50;
+}
+#apptabs a {
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  border-bottom: 2px solid transparent;
+}
+#apptabs a:hover { color: var(--text); }
+#apptabs a[aria-current='page'] { color: var(--text); border-bottom-color: #11d8f2; }
+#apptabs a.source { margin-left: auto; font-weight: 500; font-size: 12px; }
+/* the 3D view keeps its size while hidden, so a molecule loaded meanwhile is framed right */
+body[data-page]:not([data-page='viewer']) #viewport { visibility: hidden; }
+body[data-page]:not([data-page='viewer']) :is(#panel, #empty-state, #tooltip, #toast, #drop-overlay) { display: none !important; }
+@media (max-width: 640px) {
+  #apptabs { padding: 0 4px; overflow-x: auto; }
+  #apptabs a { padding: 0 9px; white-space: nowrap; }
+  #apptabs a.source { display: none; }
+}

@@ -10,6 +10,7 @@ import { Simulation, parseSliders } from './simulation.js';
 import { Color } from 'three';
 import TABS from '../samples/tabs.json';
 import faviconUrl from '../assets/favicon.png?inline';
+import { initTabs } from './lab/tabs.js';
 
 // Inlined as a data URL so the single-file build keeps its icon.
 document.head.append(Object.assign(document.createElement('link'), { rel: 'icon', href: faviconUrl }));
@@ -499,8 +500,9 @@ fileInput.addEventListener('change', () => {
 const overlay = $('drop-overlay');
 const hasFiles = (e) => e.dataTransfer?.types?.includes('Files');
 let dragDepth = 0;
+const onViewerTab = () => (document.body.dataset.page ?? 'viewer') === 'viewer';
 window.addEventListener('dragenter', (e) => {
-  if (!hasFiles(e)) return;
+  if (!hasFiles(e) || !onViewerTab()) return;
   e.preventDefault();
   dragDepth++;
   overlay.hidden = false;
@@ -515,6 +517,7 @@ window.addEventListener('dragleave', () => {
   }
 });
 window.addEventListener('drop', (e) => {
+  if (!onViewerTab()) return; // the other tabs handle their own drops
   e.preventDefault();
   dragDepth = 0;
   overlay.hidden = true;
@@ -610,7 +613,7 @@ const styleKeys = Object.keys(STYLES);
 // −/+ resize a parametric object; matched on the physical key so it works with or without Shift and on the numpad
 const SIZE_KEYS = { Equal: 1, NumpadAdd: 1, Minus: -1, NumpadSubtract: -1 };
 window.addEventListener('keydown', (e) => {
-  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.ctrlKey || e.metaKey || e.altKey || !onViewerTab()) return;
   if (e.target.closest?.('input[type=text], input[type=number], input[type=range], textarea, select')) return;
   const k = e.key.toLowerCase();
   if (k === ' ' && e.target.tagName === 'BUTTON') return; // the focused button handles Space itself
@@ -1176,3 +1179,7 @@ function toast(msg) {
 }
 
 initExamples();
+
+// The app tabs along the top: the viewer, the pulse experiment and the intensity sweep. The viewer stops drawing
+// while it's hidden.
+initTabs((page) => viewer.setPaused(page !== 'viewer'));
