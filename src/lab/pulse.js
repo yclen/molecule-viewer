@@ -452,11 +452,13 @@ export function mount(root) {
 
   // ---- the plot ----
   let plot = null;
+  let yRange = null; // the counts axis range: see setY
   const box = $('plotBox');
   const legend = $('legend');
 
   function makePlot() {
     plot?.destroy();
+    yRange = null; // a new plot (log or linear) starts from a fitted range
     const log = $('log').checked;
     const piles = PILES[p.sample];
     plot = new uPlot({
@@ -518,7 +520,7 @@ export function mount(root) {
         else hidden.add(pile);
         item.classList.toggle('off', hidden.has(pile));
         plot.setSeries(i + 1, { show: !hidden.has(pile) });
-        if (autoY) fitY();
+        holdY();
       };
       legend.append(item);
     });
@@ -593,8 +595,7 @@ export function mount(root) {
     legend.lastChild.hidden = !expected;
     const piles = PILES[p.sample];
     plot.setData([Array.from(edges), ...[main, other].slice(0, piles.length).map((c) => Array.from(steps(c)))], false);
-    if (autoY) fitY();
-    else plot.redraw(false);
+    holdY();
   }
 
   function fitY() {
@@ -602,6 +603,7 @@ export function mount(root) {
     const { edges, main, other, expected, perS } = drawn;
     const { min, max } = plot.scales.x;
     const piles = PILES[p.sample];
+    if (yRange && piles.every((pile) => hidden.has(pile))) return plot.setScale('y', yRange); // nothing to fit to
     let top = 0;
     const lists = [main, other].slice(0, piles.length);
     lists.forEach((counts, i) => {
@@ -612,8 +614,22 @@ export function mount(root) {
       }
     });
     const log = $('log').checked;
-    if (log) plot.setScale('y', { min: EMPTY_BIN * perS, max: Math.max(top * 2, 10) * perS });
-    else plot.setScale('y', { min: 0, max: Math.max(top * 1.08, 5) * perS });
+    if (log) setY({ min: EMPTY_BIN * perS, max: Math.max(top * 2, 10) * perS });
+    else setY({ min: 0, max: Math.max(top * 1.08, 5) * perS });
+  }
+
+  /**
+   * The counts axis range is kept here, not left to uPlot: while every curve is hidden uPlot loses its y range, so
+   * with AUTO Y off the curves stayed off the plot when shown again. Each redraw puts the kept range back.
+   */
+  function setY(range) {
+    yRange = range;
+    plot.setScale('y', range);
+  }
+
+  function holdY() {
+    if (autoY || !yRange) fitY();
+    else plot.setScale('y', yRange);
   }
 
   function home() {
