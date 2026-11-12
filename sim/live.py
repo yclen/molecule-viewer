@@ -96,7 +96,7 @@ WINDOW_LIFETIMES = 10  # default time window, in singlet lifetimes
 CELLS_PER_LIFETIME = BINS_PER_LIFETIME * 10  # counts are kept this fine, so bins can change without losing anything
 MOST_CELLS = 200_000
 BIN_CELLS = (1, 2, 5, 10, 20, 50, 100)  # the bin widths on offer, in cells
-DEFAULT_BIN_CELLS = 10  # a tenth of the singlet lifetime, the same default as a pulse run
+DEFAULT_BIN_CELLS = 1  # 0.05 ns at the default tauS of 5 ns: the finest bins
 
 THREADS = max(1, (os.cpu_count() or 2) // 2)  # more than this gains little, and the window gets jerky
 BATCH_S = 0.02  # how long a thread's batch aims to take, so Stop and new parameters take effect quickly
@@ -106,7 +106,8 @@ FRAME_MS = 50
 SEND_S = 0.05  # how often finished batches go to the window
 FRAMES_PER_TEXT = 5  # the numbers change less often than the histogram, so they can be read
 RATE_OVER_S = 2.0  # the rates on screen are averages over this long
-EMPTY_BIN = 0.5  # where a bin with no counts sits on a log axis, which can't show 0
+EMPTY_BIN = 0.5  # where a bin with no counts sits on a log axis, which can't show 0: half a count
+LEAST_SECONDS = 0.25  # the per-second scale treats the first moments as this long, so the start doesn't spike
 PAST_WARNING = 0.01  # the Photons readout warns once this share of photons lands after the time window
 EXACT_MOST_N = 9  # 3^11 strings. Beyond this the exact solve doesn't fit in memory
 EXACT_SLOW_S = 60  # an exact solve estimated to take longer than this is called slow
@@ -656,7 +657,7 @@ class Window(QtWidgets.QMainWindow):
         box.addLayout(grid)
 
         checks = QtWidgets.QHBoxLayout()
-        self.log_box = QtWidgets.QCheckBox('Log counts')
+        self.log_box = QtWidgets.QCheckBox('Log scale')
         self.log_box.toggled.connect(self.log_changed)
         self.exact_box = QtWidgets.QCheckBox('Exact overlay')
         self.exact_box.setToolTip('Solve for the histogram the counts are heading for, and draw it over them.')
@@ -785,7 +786,7 @@ class Window(QtWidgets.QMainWindow):
         box.setContentsMargins(6, 8, 10, 6)
         self.plot = pg.PlotWidget()
         self.plot.showGrid(x=True, y=True, alpha=0.12)
-        big_axes(self.plot, 'Photons per bin', 'Time after the pulse starts (ns)')
+        big_axes(self.plot, 'Photons per bin per second', 'Time after the pulse starts (ns)')
         self.plot.setMouseEnabled(x=True, y=False)
         self.plot.addLegend(offset=(-20, 12), labelTextColor=TEXT, labelTextSize='12pt', brush=pg.mkBrush(BG + 'cc'),
                             pen=pg.mkPen(EDGE))
@@ -872,7 +873,8 @@ class Window(QtWidgets.QMainWindow):
             values.append(y[inside & np.isfinite(y)])
         values = np.concatenate(values) if values else np.array([])
         log = self.log_box.isChecked()
-        bottom = np.log10(EMPTY_BIN) if log else 0.0
+        per_s = self.drawn[4] if hasattr(self, 'drawn') else 1.0
+        bottom = np.log10(EMPTY_BIN * per_s) if log else 0.0
         top = values.max() if values.size else bottom
         if top <= bottom:
             top = bottom + 1
@@ -1138,19 +1140,26 @@ class Window(QtWidgets.QMainWindow):
             self.show_numbers()
 
     def draw(self):
+        """The histogram per second of acquisition (the ACQ clock), so it settles to a steady height as the counts build
+        up instead of growing. The counts themselves stay counts, for the hover readout and Save."""
         edges, main, other = self.measurement.binned(self.cells_per_bin)
         sample = self.measurement.p['sample']
-        floor = EMPTY_BIN if self.log_box.isChecked() else 0
+        log = self.log_box.isChecked()
+        per_s = 1 / max(self.acquired_s, LEAST_SECONDS)
+        floor = EMPTY_BIN * per_s if log else 0
         for curve, counts in zip(self.count_curves[sample], (main, other)):  # the fluorophore has no `other`
-            curve.setData(edges, np.maximum(counts, floor))
+            curve.setData(edges, np.maximum(counts * per_s, floor))
+            if log:
+                curve.setFillLevel(np.log10(floor))  # in log mode the fill level is in log units
         expected = None
         if self.exact_shown():
             # photons the exact solve expects in each bin from the molecules counted so far, drawn at the bin centres
             expected = [share * self.measurement.totals['molecules'] for share in self.exact.binned(edges)]
             centres = (edges[:-1] + edges[1:]) / 2
             for curve, counts in zip(self.exact_curves[sample], expected):
-                curve.setData(centres, np.where(counts > 0, counts, np.nan) if self.log_box.isChecked() else counts)
-        self.drawn = edges, main, other, expected
+                rate = counts * per_s
+                curve.setData(centres, np.where(rate > 0, rate, np.nan) if log else rate)
+        self.drawn = edges, main, other, expected, per_s
         if self.auto_y:
             self.fit_y()
         if self.hovered is not None:
@@ -1221,13 +1230,14 @@ class Window(QtWidgets.QMainWindow):
     def show_bin(self, t):
         if not hasattr(self, 'drawn'):
             return
-        edges, main, other, expected = self.drawn
+        edges, main, other, expected, per_s = self.drawn
         k = np.searchsorted(edges, t, side='right') - 1
         if 0 <= k < main.size:
-            exact = [f' (exact {counts[k]:,.1f})' for counts in expected] if expected else ['', '']
+            exact = [f' (exact {counts[k] * per_s:.3g} /s)' for counts in expected] if expected else ['', '']
             piles = PILES[self.measurement.p['sample']]
             self.status.setText('   ·   '.join([f'{edges[k]:.4g} to {edges[k + 1]:.4g} ns'] + [
-                f'{name} {counts[k]:,}{note}' for name, counts, note in zip(piles, (main, other), exact)]))
+                f'{name} {counts[k] * per_s:.3g} /s{note}, {counts[k]:,} counted'
+                for name, counts, note in zip(piles, (main, other), exact)]))
 
     # ---- saving and closing ----
 
@@ -1256,15 +1266,17 @@ class Window(QtWidgets.QMainWindow):
             writer = csv.writer(out)
             # TTA has perylene_photons and dpa_photons; the fluorophore has fluorescence_photons
             writer.writerow(['point', 'bin_start_ns', 'bin_end_ns', 'pulse_on', 'photons']
-                            + [f'{name}_photons' for name in piles] + ['photons_per_molecule_per_ns', 'error']
+                            + [f'{name}_photons' for name in piles] + ['photons_per_molecule_per_ns', 'error', 'photons_per_s']
                             + ([f'exact_{name}_photons' for name in piles] if exact else []))
             for k in range(total.size):
                 writer.writerow([0, edges[k], edges[k + 1], int(edges[k] < m.p['duration']), total[k]]
                                 + [counts[k] for counts in counted]
-                                + [total[k] * scale[k], total[k] ** 0.5 * scale[k]]
+                                + [total[k] * scale[k], total[k] ** 0.5 * scale[k],
+                                   total[k] / max(self.acquired_s, LEAST_SECONDS)]  # what the plot shows
                                 + ([share[k] * totals['molecules'] for share in exact] if exact else []))
         with (folder / 'summary.csv').open('w', newline='') as out:
-            row = {**m.p, **totals, 'photons_per_excitation': totals['photons'] / max(totals['excitations'], 1)}
+            row = {**m.p, **totals, 'acquired_s': self.acquired_s,
+                   'photons_per_excitation': totals['photons'] / max(totals['excitations'], 1)}
             if exact:
                 row['exact_photons_per_excitation'] = self.exact.photons / self.exact.excitations
             writer = csv.DictWriter(out, row.keys())

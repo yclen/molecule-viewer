@@ -20,12 +20,13 @@ const TARGET = 100_000; // molecules per second to aim for. 0 means as fast as t
 const CELLS_PER_LIFETIME = 100; // counts are kept this fine, so bins can change without losing anything
 const MOST_CELLS = 200_000;
 const BIN_CELLS = [1, 2, 5, 10, 20, 50, 100];
-const DEFAULT_BIN_CELLS = 10; // a tenth of the singlet lifetime
+const DEFAULT_BIN_CELLS = 1; // 0.05 ns at the default τS of 5 ns: the finest bins
 const THREADS = Math.min(8, Math.max(1, Math.floor((navigator.hardwareConcurrency || 2) / 2)));
 const FRAME_MS = 50;
 const FRAMES_PER_TEXT = 5;
 const RATE_OVER_S = 2;
-const EMPTY_BIN = 0.5; // where an empty bin sits on a log axis, which can't show 0
+const EMPTY_BIN = 0.5; // where an empty bin sits on a log axis, which can't show 0: half a count
+const LEAST_SECONDS = 0.25; // the per-second scale treats the first moments as this long, so the start doesn't spike
 const PAST_WARNING = 0.01;
 const EXACT_MOST_N = 9;
 const EXACT_SLOW_S = 60;
@@ -122,7 +123,7 @@ const TEMPLATE = `
         <label for="pulse-bin">Bin width</label><select id="pulse-bin" data-id="bin"></select><span class="unit"></span>
         <label for="pulse-target">Throughput</label><input type="text" id="pulse-target" data-id="target" inputmode="numeric"><span class="unit">mol/s</span>
       </div>
-      <label class="check"><input type="checkbox" data-id="log"> Log counts</label>
+      <label class="check"><input type="checkbox" data-id="log"> Log scale</label>
       <button class="exact-btn" data-id="exact"></button>
       <div class="bar" data-id="exactBar" hidden><div></div></div>
       <div class="caption" data-id="exactNote"></div>
@@ -467,11 +468,11 @@ export function mount(root) {
       scales: { x: { time: false, auto: false, min: 0, max: p.window }, y: { distr: log ? 3 : 1, auto: false, min: log ? EMPTY_BIN : 0, max: 10 } },
       axes: [
         { ...AXIS, label: 'Time after the pulse starts (ns)' },
-        { ...AXIS, label: 'Photons per bin', size: Y_AXIS_SIZE },
+        { ...AXIS, label: 'Photons per bin per second', size: Y_AXIS_SIZE },
       ],
       series: [{}, ...piles.map((pile, i) => ({
         stroke: COLOURS[pile], width: 1.5, fill: `${COLOURS[pile]}${i === 0 ? '30' : '40'}`,
-        paths: uPlot.paths.stepped({ align: 1 }), points: { show: false }, fillTo: () => (log ? EMPTY_BIN : 0),
+        paths: uPlot.paths.stepped({ align: 1 }), points: { show: false }, fillTo: () => (log ? EMPTY_BIN * (drawn?.perS ?? 1) : 0),
         show: !hidden.has(pile),
       }))],
       hooks: {
@@ -552,7 +553,7 @@ export function mount(root) {
       ctx.beginPath();
       let pen = false;
       for (let k = 0; k < expected[i].length; k++) {
-        const y = expected[i][k];
+        const y = expected[i][k] * drawn.perS;
         if (log && !(y > 0)) {
           pen = false;
           continue;
@@ -568,22 +569,27 @@ export function mount(root) {
     ctx.restore();
   }
 
+  /**
+   * The plot shows counts per second of acquisition (the ACQ clock), so it settles to a steady height as the counts
+   * build up instead of growing. The counts themselves are kept as counts.
+   */
   function draw() {
     if (!plot) return;
     const { edges, main, other } = measurement.binned(cellsPerBin);
     const log = $('log').checked;
-    const floor = log ? EMPTY_BIN : 0;
+    const perS = 1 / Math.max(acquired, LEAST_SECONDS);
+    const floor = log ? EMPTY_BIN * perS : 0;
     const steps = (counts) => {
       const y = new Float64Array(counts.length + 1);
-      for (let k = 0; k < counts.length; k++) y[k] = Math.max(counts[k], floor);
+      for (let k = 0; k < counts.length; k++) y[k] = Math.max(counts[k] * perS, floor);
       y[counts.length] = y[counts.length - 1] ?? floor;
       return y;
     };
-    let expected = null;
+    let expected = null; // in counts, like main and other
     if (exactShown()) {
       expected = binnedExact(exact.result, edges).map((share) => share.map((v) => v * measurement.totals.molecules));
     }
-    drawn = { edges, main, other, expected };
+    drawn = { edges, main, other, expected, perS };
     legend.lastChild.hidden = !expected;
     const piles = PILES[p.sample];
     plot.setData([Array.from(edges), ...[main, other].slice(0, piles.length).map((c) => Array.from(steps(c)))], false);
@@ -593,7 +599,7 @@ export function mount(root) {
 
   function fitY() {
     if (!drawn) return;
-    const { edges, main, other, expected } = drawn;
+    const { edges, main, other, expected, perS } = drawn;
     const { min, max } = plot.scales.x;
     const piles = PILES[p.sample];
     let top = 0;
@@ -606,8 +612,8 @@ export function mount(root) {
       }
     });
     const log = $('log').checked;
-    if (log) plot.setScale('y', { min: EMPTY_BIN, max: Math.max(top * 2, 10) });
-    else plot.setScale('y', { min: 0, max: Math.max(top * 1.08, 5) });
+    if (log) plot.setScale('y', { min: EMPTY_BIN * perS, max: Math.max(top * 2, 10) * perS });
+    else plot.setScale('y', { min: 0, max: Math.max(top * 1.08, 5) * perS });
   }
 
   function home() {
@@ -619,7 +625,7 @@ export function mount(root) {
 
   function showBin(t) {
     if (!drawn) return;
-    const { edges, main, other, expected } = drawn;
+    const { edges, main, other, expected, perS } = drawn;
     let k = 0;
     while (k < edges.length - 1 && edges[k + 1] <= t) k++;
     if (t < 0 || k >= main.length) return;
@@ -627,7 +633,7 @@ export function mount(root) {
     const parts = [`${fmt(edges[k], 4)} to ${fmt(edges[k + 1], 4)} ns`];
     piles.forEach((pile, i) => {
       const counts = i === 0 ? main : other;
-      parts.push(`${pile} ${int(counts[k])}${expected ? ` (exact ${expected[i][k].toFixed(1)})` : ''}`);
+      parts.push(`${pile} ${fmt(counts[k] * perS, 3)} /s${expected ? ` (exact ${fmt(expected[i][k] * perS, 3)} /s)` : ''}, ${int(counts[k])} counted`);
     });
     $('status').textContent = parts.join('   ·   ');
   }
@@ -709,10 +715,12 @@ export function mount(root) {
       piles.forEach((pile, i) => (row[`${pile}_photons`] = counted[i][k]));
       row.photons_per_molecule_per_ns = total * scale;
       row.error = Math.sqrt(total) * scale;
+      row.photons_per_s = total / Math.max(acquired, LEAST_SECONDS); // what the plot shows: per second of acquisition
       if (exactBins) piles.forEach((pile, i) => (row[`exact_${pile}_photons`] = exactBins[i][k] * totals.molecules));
       rows.push(row);
     }
-    const summary = { ...m.p, ...totals, photons_per_excitation: totals.photons / Math.max(totals.excitations, 1) };
+    const summary = { ...m.p, ...totals, acquired_s: acquired,
+      photons_per_excitation: totals.photons / Math.max(totals.excitations, 1) };
     if (exactBins) summary.exact_photons_per_excitation = exact.result.photons / exact.result.excitations;
     const { day, time } = stamp();
     const files = [
